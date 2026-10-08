@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: "24.21.0"
       - name: Formatting
-        run: test -z "$(gofmt -l cmd internal migrations tests)"
+        run: test -z "$(gofmt -l cmd internal migrations tests examples)"
       - name: Verify module checksums
         run: go mod verify
       - name: Vet
@@ -49,7 +49,7 @@ jobs:
       - name: Build
         run: go build ./...
       - name: Dependency vulnerabilities
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+        run: go -C cmd/mailbox run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -scan=module
       - name: Install OpenSpec
         run: npm install -g @fission-ai/openspec@1.14.1
       - name: OpenSpec validation

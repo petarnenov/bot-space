@@ -16,6 +16,8 @@ import (
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
 	"github.com/petarnenov/bot-space/internal/identity"
+	"github.com/petarnenov/bot-space/internal/mailbox"
+	"github.com/petarnenov/bot-space/internal/mcpserver"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 	"github.com/petarnenov/bot-space/migrations"
 )
@@ -77,11 +79,22 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	mailboxConfig, err := config.LoadMailbox(os.Getenv, identityConfig.BaseURL)
+	if err != nil {
+		return err
+	}
 	server := httpserver.New(func(ctx context.Context) error { return database.Ready(ctx, pool, versions) }, logger)
 	if identityConfig.Enabled {
 		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
 		web.Register(server)
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
+	}
+	if mailboxConfig.Enabled {
+		store, err := mailbox.New(pool, mailboxConfig.CursorKey)
+		if err != nil {
+			return fmt.Errorf("mailbox configuration is invalid")
+		}
+		server.Handle("/mcp", mcpserver.New(store, mailboxConfig.AllowedOrigins))
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.Port))
 	if err != nil {

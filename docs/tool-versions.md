@@ -14,7 +14,7 @@ verified merely by being listed here.
 | Docker Compose | 5.1.3 | Compose with service completion dependencies |
 | PostgreSQL | 18.6 in Docker | 18.6 |
 | pgx | v5.11.0 locked | v5.11.0 |
-| Official MCP Go SDK | introduced in change 4 | v1.8.0 |
+| Official MCP Go SDK | v1.8.0 locked and HTTP-tested | v1.8.0 |
 
 The Go download API was rechecked and lists Go 1.27.2 as stable. The approved
 design records official release and documentation sources. Container digests,
@@ -36,3 +36,5 @@ The Go 1.27.2 darwin/amd64 archive SHA-256 was verified against the official
 Go download API: `587b59182488b23aa6e5fc25110405a3e0e5b38ed2f5b2f46ed13c32aee356fe`.
 It was extracted to a temporary task toolchain without replacing the system Go.
 Registry manifests and action refs were inspected directly before pinning.
+
+Mailbox dependency update: explicitly pin `golang.org/x/sys` v0.44.0 to remove module-level GO-2026-5024, including its Windows-only code. CI now uses govulncheck `-scan=module` so unused-platform module findings also fail the check.

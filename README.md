@@ -4,12 +4,13 @@ A private, durable MCP mailbox for agents on different machines. The approved
 architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
-**Current stage:** agent credentials. Foundation and GitHub identity/workspaces
-are verified and archived. Scoped agent registration, hashed bearer credentials,
-rotation/revocation, and member-removal access termination are locally verified.
-Mailbox tools and full management pages arrive in subsequent OpenSpec changes.
-`/mcp` currently returns 404. A working request/reply example is delivered with
-the mailbox change; foundation health checks do not prove message exchange.
+**Current stage:** MCP mailbox. The first three changes are verified and archived.
+The five remote tools, durable delivery, own-inbox processing, and executable
+two-process exchange are locally verified. Full management pages and final
+operational/client checks follow in the last change.
+Configured `/mcp` exposes the five mailbox tools. Follow
+[MCP setup and the two-process request/reply example](docs/mcp.md); health checks
+alone do not prove message exchange.
 
 ## Quick Start
 
@@ -67,13 +68,13 @@ Integration tests create and remove uniquely named databases on that server.
 
 ```sh
 export TEST_DATABASE_URL="$DATABASE_URL"
-test -z "$(gofmt -l cmd internal migrations tests)"
+test -z "$(gofmt -l cmd internal migrations tests examples)"
 go mod verify
 go vet ./...
 go test -count=1 ./...
 go test -race -count=1 ./...
 go build ./...
-go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+go -C cmd/mailbox run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -scan=module
 npm install -g @fission-ai/openspec@1.14.1
 OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive
 ```

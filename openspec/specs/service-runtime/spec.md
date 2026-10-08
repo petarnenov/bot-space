@@ -46,7 +46,7 @@ The service SHALL reject request bodies above 1 MiB with HTTP 413 before applica
 - **THEN** the server terminates the request without invoking an application handler.
 
 ### Requirement: Private features remain unavailable
-Configured GitHub login/callback/logout and authenticated workspace-selection routes SHALL be available after identity initialization. `/mcp` and unimplemented management routes SHALL return HTTP 404 without tools, messages, or account actions. Without complete identity configuration, only public health endpoints SHALL be available.
+Configured identity routes SHALL be available after identity initialization. Independently configured mailbox routes SHALL expose authenticated MCP at `/mcp`; without mailbox configuration that route SHALL return 404. Unimplemented management routes SHALL remain unavailable. If neither identity nor mailbox is configured, only public health endpoints SHALL be available.
 
 #### Scenario: Premature MCP access
 - **GIVEN** the foundation service is running
@@ -57,6 +57,11 @@ Configured GitHub login/callback/logout and authenticated workspace-selection ro
 - **GIVEN** valid GitHub identity configuration
 - **WHEN** a browser requests login or uses its valid session for workspace selection
 - **THEN** the configured identity flow is available and only its own memberships are shown.
+
+#### Scenario: Configured mailbox routes
+- **GIVEN** valid mailbox cursor-signing configuration
+- **WHEN** a native client connects with its own valid bearer credential
+- **THEN** authenticated MCP is available independently of browser login.
 
 ### Requirement: Safe operational logging
 Logs SHALL contain operational metadata only and SHALL exclude bearer tokens, OAuth codes/tokens, cookies, invitation secrets, database credentials, request query values, and message bodies. Client errors SHALL exclude raw database errors and configuration values.
