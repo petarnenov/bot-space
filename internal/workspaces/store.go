@@ -177,6 +177,9 @@ func (s *Store) mutateMember(ctx context.Context, workspaceID, actorID, targetID
 	}
 	action := "member_role_changed"
 	if remove {
+		if _, err = tx.Exec(ctx, "SELECT set_config('mailbox.audit_actor',$1,true)", actorID); err != nil {
+			return ErrUnavailable
+		}
 		_, err = tx.Exec(ctx, "DELETE FROM mailbox.memberships WHERE workspace_id=$1 AND user_id=$2", workspaceID, targetID)
 		action = "member_removed"
 	} else {

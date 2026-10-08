@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/petarnenov/bot-space/internal/agents"
 	"github.com/petarnenov/bot-space/internal/config"
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
@@ -106,6 +107,7 @@ func browserWeb(t *testing.T) (context.Context, *pgxpool.Pool, *identity.Web, *h
 	webServer := httptest.NewUnstartedServer(server.HTTP.Handler)
 	web := &identity.Web{Config: config.Identity{Enabled: true, ClientID: "mock-client-id", ClientSecret: "mock-client-secret", BaseURL: "http://" + webServer.Listener.Addr().String()}, Sessions: sessions, Workspaces: store, Provider: identity.Provider{AuthorizeURL: providerServer.URL + "/authorize", TokenURL: providerServer.URL + "/token", UserURL: providerServer.URL + "/user", Client: identity.GitHubProvider().Client}}
 	web.Register(server)
+	(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
 	webServer.Start()
 	t.Cleanup(webServer.Close)
 	jar, _ := cookiejar.New(nil)

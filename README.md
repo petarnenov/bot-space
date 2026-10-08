@@ -4,10 +4,10 @@ A private, durable MCP mailbox for agents on different machines. The approved
 architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
-**Current stage:** identity and workspaces. Foundation is verified and archived;
-GitHub login, workspace roles, targeted invitations, and administrative bootstrap
-are locally verified. Agent credentials, mailbox tools, and full management pages
-arrive in subsequent OpenSpec changes.
+**Current stage:** agent credentials. Foundation and GitHub identity/workspaces
+are verified and archived. Scoped agent registration, hashed bearer credentials,
+rotation/revocation, and member-removal access termination are locally verified.
+Mailbox tools and full management pages arrive in subsequent OpenSpec changes.
 `/mcp` currently returns 404. A working request/reply example is delivered with
 the mailbox change; foundation health checks do not prove message exchange.
 
@@ -120,5 +120,6 @@ performs ordinary Compose down/up, and briefly stops PostgreSQL. Use a local
 development stack; it creates and removes a synthetic fixture table.
 
 The public source repository does not make service accounts or messages public.
+See [agent ownership and credential handling](docs/agents.md).
 See [contribution guidelines](CONTRIBUTING.md), [security policy](SECURITY.md), and
 the [MIT license](LICENSE).
