@@ -1,0 +1,56 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_USER: mailbox
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: mailbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mailbox -d mailbox"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://mailbox:ci-test-only@localhost:5432/mailbox?sslmode=disable
+      OPENSPEC_TELEMETRY: "0"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.27.2"
+          cache: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.21.0"
+      - name: Formatting
+        run: test -z "$(gofmt -l cmd internal migrations tests)"
+      - name: Verify module checksums
+        run: go mod verify
+      - name: Vet
+        run: go vet ./...
+      - name: Tests with PostgreSQL
+        run: go test -count=1 ./...
+      - name: Race detector
+        run: go test -race -count=1 ./...
+      - name: Build
+        run: go build ./...
+      - name: Dependency vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - name: Install OpenSpec
+        run: npm install -g @fission-ai/openspec@1.14.1
+      - name: OpenSpec validation
+        run: openspec validate --all --strict --no-interactive

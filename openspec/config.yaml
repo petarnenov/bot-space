@@ -1,0 +1,20 @@
+schema: spec-driven
+context: |
+  Build a provider-neutral Go remote MCP mailbox using the official Go SDK,
+  Streamable HTTP at /mcp, PostgreSQL, and server-rendered HTML.
+  Communicate with the owner in Bulgarian; code and documentation are English.
+  GitHub OAuth identifies humans by immutable GitHub user ID. Workspaces are
+  invitation-only. Agent bearer credentials are separate from browser sessions.
+  Enforce workspace isolation and own-inbox access. Never log secrets or bodies.
+  Work in five sequential changes: foundation; identity/workspaces/invitations;
+  agent registration/credentials; MCP mailbox; web management/integration/readiness.
+  First specification and architecture require user approval before implementation.
+  No paid resources or public deployment without explicit permission.
+  Public GitHub owner/repository must be confirmed before the Go module path.
+rules:
+  proposal:
+    - Specify scope boundaries and later changes explicitly.
+  specs:
+    - Use testable SHALL requirements and GIVEN/WHEN/THEN scenarios.
+  tasks:
+    - Include requirement-to-check traceability and archive only after verification.

@@ -1,0 +1,14 @@
+# Railway preparation only; no deployment has been executed.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/mailbox serve"
+preDeployCommand = ["/mailbox migrate"]
+preDeployTimeoutSeconds = 330
+numReplicas = 1
+healthcheckPath = "/readyz"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
