@@ -4,9 +4,10 @@ A private, durable MCP mailbox for agents on different machines. The approved
 architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
-**Current stage:** project foundation. The runtime and migration infrastructure
-are implemented and locally verified. GitHub login, workspaces, invitations, agent credentials,
-mailbox tools, and management pages arrive in subsequent OpenSpec changes.
+**Current stage:** identity and workspaces. Foundation is verified and archived;
+GitHub login, workspace roles, targeted invitations, and administrative bootstrap
+are locally verified. Agent credentials, mailbox tools, and full management pages
+arrive in subsequent OpenSpec changes.
 `/mcp` currently returns 404. A working request/reply example is delivered with
 the mailbox change; foundation health checks do not prove message exchange.
 
@@ -46,6 +47,10 @@ filesystem state. PostgreSQL 18's volume is mounted at `/var/lib/postgresql`.
 Start PostgreSQL with `docker compose up -d db`. Export a local `DATABASE_URL`
 using the values from `.env` and the selected host database port; percent-encode
 credentials if needed. The Go process does not automatically read `.env`.
+
+For browser login and initial owner/workspace bootstrap, follow
+[GitHub identity setup](docs/identity.md). Absent identity settings retain
+operations-only serving; partial settings fail startup.
 
 ```sh
 export DATABASE_URL='postgres://mailbox:YOUR_LOCAL_PASSWORD@localhost:5432/mailbox?sslmode=disable'

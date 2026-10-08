@@ -23,12 +23,14 @@ type Server struct {
 	draining       atomic.Bool
 	logger         *slog.Logger
 	cancelRequests context.CancelFunc
+	mux            *http.ServeMux
 }
 
 func New(ready func(context.Context) error, logger *slog.Logger) *Server {
 	requests, cancel := context.WithCancel(context.Background())
 	s := &Server{logger: logger, cancelRequests: cancel}
 	mux := http.NewServeMux()
+	s.mux = mux
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, `{"status":"alive"}`)
 	})
@@ -52,6 +54,9 @@ func New(ready func(context.Context) error, logger *slog.Logger) *Server {
 	}
 	return s
 }
+
+// Handle registers a route before serving, preserving the global body limit.
+func (s *Server) Handle(pattern string, handler http.Handler) { s.mux.Handle(pattern, handler) }
 
 func writeJSON(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Content-Type", "application/json")

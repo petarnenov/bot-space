@@ -7,7 +7,7 @@ import (
 
 func TestBundled(t *testing.T) {
 	ms, err := Bundled()
-	if err != nil || len(ms) != 1 || ms[0].Version != 1 || len(ms[0].Checksum) != 64 {
+	if err != nil || len(ms) < 1 || ms[0].Version != 1 || len(ms[0].Checksum) != 64 {
 		t.Fatalf("invalid bundle: %v", err)
 	}
 }

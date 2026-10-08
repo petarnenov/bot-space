@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -12,6 +14,8 @@ import (
 	"github.com/petarnenov/bot-space/internal/config"
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
+	"github.com/petarnenov/bot-space/internal/identity"
+	"github.com/petarnenov/bot-space/internal/workspaces"
 	"github.com/petarnenov/bot-space/migrations"
 )
 
@@ -25,11 +29,11 @@ func main() {
 
 func run(logger *slog.Logger) error {
 	command := "serve"
-	if len(os.Args) == 2 {
+	if len(os.Args) >= 2 {
 		command = os.Args[1]
 	}
-	if len(os.Args) > 2 || (command != "serve" && command != "migrate") {
-		return fmt.Errorf("usage: mailbox [serve|migrate]")
+	if (len(os.Args) > 2 && command != "bootstrap-owner") || (command != "serve" && command != "migrate" && command != "bootstrap-owner") {
+		return fmt.Errorf("usage: mailbox [serve|migrate|bootstrap-owner]")
 	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
@@ -53,7 +57,30 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer pool.Close()
+	if command == "bootstrap-owner" {
+		flags := flag.NewFlagSet("bootstrap-owner", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		githubID := flags.Int64("github-user-id", 0, "Immutable GitHub user ID")
+		slug := flags.String("workspace", "", "Workspace slug")
+		if flags.Parse(os.Args[2:]) != nil || flags.NArg() != 0 {
+			return fmt.Errorf("invalid bootstrap arguments")
+		}
+		workspace, err := (&workspaces.Store{Pool: pool}).Bootstrap(ctx, *githubID, *slug)
+		if err != nil {
+			return err
+		}
+		logger.Info("workspace_bootstrapped", "workspace_id", workspace.ID)
+		return nil
+	}
+	identityConfig, err := config.LoadIdentity(os.Getenv)
+	if err != nil {
+		return err
+	}
 	server := httpserver.New(func(ctx context.Context) error { return database.Ready(ctx, pool, versions) }, logger)
+	if identityConfig.Enabled {
+		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
+		web.Register(server)
+	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.Port))
 	if err != nil {
 		return fmt.Errorf("HTTP listener could not be opened")
