@@ -5,7 +5,7 @@ architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
 **Current stage:** project foundation. The runtime and migration infrastructure
-are being verified. GitHub login, workspaces, invitations, agent credentials,
+are implemented and locally verified. GitHub login, workspaces, invitations, agent credentials,
 mailbox tools, and management pages arrive in subsequent OpenSpec changes.
 `/mcp` currently returns 404. A working request/reply example is delivered with
 the mailbox change; foundation health checks do not prove message exchange.
@@ -87,8 +87,8 @@ contains its entry point; `internal/config`, `internal/database`, and
 OpenSpec changes proceed in order: foundation; GitHub identity/workspaces/invites;
 agent ownership/credentials; MCP mailbox; web management/full integration and
 Railway readiness. Review the approved
-[architecture](openspec/changes/project-foundation/design.md) and
-[requirements](openspec/changes/project-foundation/specs/).
+[architecture](openspec/changes/archive/2026-10-08-project-foundation/design.md) and
+[requirements](openspec/specs/).
 
 The planned mailbox authenticates every request with the agent's own bearer
 credential, restricts agents to their workspace and inbox, and commits messages
