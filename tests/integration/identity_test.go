@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -20,7 +21,10 @@ import (
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
 	"github.com/petarnenov/bot-space/internal/identity"
+	"github.com/petarnenov/bot-space/internal/mailbox"
+	"github.com/petarnenov/bot-space/internal/mcpserver"
 	"github.com/petarnenov/bot-space/internal/security"
+	management "github.com/petarnenov/bot-space/internal/web"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 )
 
@@ -108,6 +112,12 @@ func browserWeb(t *testing.T) (context.Context, *pgxpool.Pool, *identity.Web, *h
 	web := &identity.Web{Config: config.Identity{Enabled: true, ClientID: "mock-client-id", ClientSecret: "mock-client-secret", BaseURL: "http://" + webServer.Listener.Addr().String()}, Sessions: sessions, Workspaces: store, Provider: identity.Provider{AuthorizeURL: providerServer.URL + "/authorize", TokenURL: providerServer.URL + "/token", UserURL: providerServer.URL + "/user", Client: identity.GitHubProvider().Client}}
 	web.Register(server)
 	(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
+	(&management.Management{Browser: web, Teams: store, Agents: &agents.Store{Pool: pool}, MailboxEnabled: true}).Register(server)
+	mailboxStore, err := mailbox.New(pool, bytes.Repeat([]byte{3}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Handle("/mcp", mcpserver.New(mailboxStore, []string{web.Config.BaseURL}))
 	webServer.Start()
 	t.Cleanup(webServer.Close)
 	jar, _ := cookiejar.New(nil)

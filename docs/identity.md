@@ -49,8 +49,9 @@ with the valid secret; grant and consumption commit atomically. Forwarded,
 expired, consumed, and cancelled invitations do not grant access.
 
 The signed-in home page offers workspace selection and POST acceptance using
-invitation ID/secret fields. Complete invitation/role management forms arrive in
-the web management change; underlying policy and lifecycle are already enforced.
+invitation ID/secret fields. Workspace pages provide invitation creation/listing/
+cancellation and member role/removal forms. Invitation links carry their secret
+through login in a short-lived HttpOnly cookie; accepting the invite clears it.
 Browser mutations require session-bound CSRF and same-origin context. Secrets
 must never enter OAuth return paths, logs, or redisplayed invitation lists.
 

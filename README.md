@@ -4,10 +4,9 @@ A private, durable MCP mailbox for agents on different machines. The approved
 architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
-**Current stage:** MCP mailbox. The first three changes are verified and archived.
-The five remote tools, durable delivery, own-inbox processing, and executable
-two-process exchange are locally verified. Full management pages and final
-operational/client checks follow in the last change.
+The five remote tools, durable delivery, browser management, and executable
+two-process exchange are implemented. The first four OpenSpec changes are
+verified and archived; the final release verification is in progress.
 Configured `/mcp` exposes the five mailbox tools. Follow
 [MCP setup and the two-process request/reply example](docs/mcp.md); health checks
 alone do not prove message exchange.
@@ -32,6 +31,17 @@ application. Startup can take several seconds after the build. Health returns
 schema is verified. The database and application ports are published only to
 host loopback. Set `DB_PORT` or `PORT` in `.env` if their default host ports are
 occupied; the application container listens internally on port 8080.
+
+To enable the full product, configure a GitHub OAuth app and set
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `PUBLIC_BASE_URL`, and
+`CURSOR_SIGNING_KEY` in `.env` as described in [identity setup](docs/identity.md)
+and [MCP configuration](docs/mcp.md). Recreate the application with
+`docker compose up -d --force-recreate app`. Bootstrap the first owner/workspace
+with the documented CLI, then open `http://localhost:8080`, invite the second
+GitHub account, and register an agent from each account. Workspace pages manage
+members, invitations, agents, and credentials. Save each token when issued, then
+run the [two-process exchange](docs/mcp.md#two-process-requestreply-example).
+Without these settings, the initial Compose start verifies health operations.
 
 ```sh
 docker compose logs app migrate
@@ -68,6 +78,7 @@ Integration tests create and remove uniquely named databases on that server.
 
 ```sh
 export TEST_DATABASE_URL="$DATABASE_URL"
+export PG_BACKUP_CONTAINER="$(docker compose ps -q db)"
 test -z "$(gofmt -l cmd internal migrations tests examples)"
 go mod verify
 go vet ./...
@@ -96,7 +107,7 @@ Railway readiness. Review the approved
 [architecture](openspec/changes/archive/2026-10-08-project-foundation/design.md) and
 [requirements](openspec/specs/).
 
-The planned mailbox authenticates every request with the agent's own bearer
+The mailbox authenticates every request with the agent's own bearer
 credential, restricts agents to their workspace and inbox, and commits messages
 to PostgreSQL before reporting success. Reading and acknowledging are distinct.
 Repeated reads and multiple clients can cause repeated processing; exactly-once
@@ -105,11 +116,12 @@ agent execution is not promised. MVP retention proposes no automatic deletion.
 The server does not launch agents. A stopped or idle Codex/Claude process is not
 automatically awakened by a new message. Runners, webhooks, and push activation
 are a future change. Bearer configuration is not a full MCP OAuth implementation;
-client compatibility will be documented from executed checks.
+see [client configuration and verification scope](docs/clients.md).
 
 ## Operations
 
-HTTP requests are limited to 1 MiB bodies and bounded timeouts. Readiness has a
+HTTP requests use 1 MiB body limits, bounded timeouts, and documented
+[peer/agent rate limits](docs/mcp.md#request-admission). Readiness has a
 two-second database/schema deadline. SIGINT/SIGTERM initiate a 20-second drain.
 Logs exclude credentials, cookies, callback query values, and message bodies.
 See [database operations](docs/database.md) and

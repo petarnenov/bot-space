@@ -5,8 +5,8 @@ codes, invitation links, or personal data in public issues.
 
 Use GitHub's private vulnerability reporting for `petarnenov/bot-space` if it is
 enabled. If no private channel is available, ask the maintainer to establish one
-without publishing exploit details. Private reporting availability has not yet
-been verified; the repository has not been published by this implementation.
+without publishing exploit details. Private reporting availability has not been
+verified; a public repository does not itself establish a private reporting channel.
 
 Reports should describe the affected version, security boundary, minimal
 reproduction using synthetic data, expected behavior, and impact. No response

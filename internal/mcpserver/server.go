@@ -13,11 +13,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/petarnenov/bot-space/internal/agents"
 	"github.com/petarnenov/bot-space/internal/config"
 	"github.com/petarnenov/bot-space/internal/mailbox"
+	"github.com/petarnenov/bot-space/internal/ratelimit"
 )
 
-func New(store *mailbox.Store, origins []string) http.Handler {
+func New(store *mailbox.Store, origins []string, provided ...*ratelimit.Limiter) http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := mcp.NewServer(&mcp.Implementation{Name: "bot-space", Version: "0.1.0"}, &mcp.ServerOptions{Logger: logger})
 	add := func(name, description string, schema map[string]any, call func(context.Context, string, json.RawMessage) (any, error)) {
@@ -83,7 +85,23 @@ func New(store *mailbox.Store, origins []string) http.Handler {
 		return store.Acknowledge(ctx, token, input.MessageID)
 	})
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, PropagateRequestCancellation: true, Logger: logger})
-	return originProtection(origins, store.Auth.Middleware(handler))
+	limit := ratelimit.New(60, 20, 10000, nil)
+	if len(provided) > 0 && provided[0] != nil {
+		limit = provided[0]
+	}
+	limited := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		p, ok := agents.FromContext(r.Context())
+		if !ok {
+			http.Error(rw, "Authentication required", 401)
+			return
+		}
+		if ok, wait := limit.Allow(p.AgentID); !ok {
+			ratelimit.Reject(rw, wait)
+			return
+		}
+		handler.ServeHTTP(rw, r)
+	})
+	return originProtection(origins, store.Auth.Middleware(limited))
 }
 
 func object(properties map[string]any, required []string) map[string]any {

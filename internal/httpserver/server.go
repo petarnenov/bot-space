@@ -58,6 +58,11 @@ func New(ready func(context.Context) error, logger *slog.Logger) *Server {
 // Handle registers a route before serving, preserving the global body limit.
 func (s *Server) Handle(pattern string, handler http.Handler) { s.mux.Handle(pattern, handler) }
 
+// Use wraps the complete handler before global body buffering; call before Serve.
+func (s *Server) Use(middleware func(http.Handler) http.Handler) {
+	s.HTTP.Handler = middleware(s.HTTP.Handler)
+}
+
 func writeJSON(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

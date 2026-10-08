@@ -64,8 +64,22 @@ func TestInvitationHTTPRequiresSessionCSRFAndTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	if response.StatusCode != 405 {
-		t.Fatal("GET invitation mutation available")
+	if response.StatusCode != 200 {
+		t.Fatal("GET invitation form unavailable")
+	}
+	newInvite, newSecret, err := web.Workspaces.Invite(ctx, w.ID, owner.User.ID, 103, "member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Jar.SetCookies(u, []*http.Cookie{{Name: web.CookieName(), Value: wrongSecret, Path: "/"}})
+	response, err = client.Get(srv.URL + "/invitations/accept?" + url.Values{"invitation_id": {newInvite.ID}, "secret": {newSecret}}.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	memberships, err := web.Workspaces.List(ctx, wrong.User.ID)
+	if err != nil || len(memberships) != 0 {
+		t.Fatal("GET invitation page granted membership")
 	}
 }
 

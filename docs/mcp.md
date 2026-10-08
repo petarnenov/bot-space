@@ -32,6 +32,23 @@ the credential, agent activation and owner membership in PostgreSQL. Tools
 recheck inside their own transactions. This is an integration bearer mode, not a
 complete MCP OAuth authorization server.
 
+## Request Admission
+
+Each application replica limits GitHub login initiation to 20 requests/minute
+with burst 5 per network peer, and `/mcp` to 120/minute with burst 60 per peer.
+These checks run before body buffering and database authentication. Authenticated
+MCP traffic also shares 60/minute with burst 20 per agent ID across all of that
+agent's credentials and clients. Rejected requests return HTTP 429,
+`rate_limited`, and `Retry-After` (1–60 seconds), without executing a tool.
+Initialization and other transport requests count toward these limits.
+
+Each bucket map holds at most 10000 identities and reclaims entries idle for ten
+minutes. If full, admission of a new identity waits until capacity is available.
+Peer keys use the actual socket peer; `X-Forwarded-For` is ignored. Behind a
+proxy, its connections may therefore share a peer bucket. Railway is configured
+for one replica. Multiple replicas have independent buckets; no distributed
+quota is promised. `/healthz` and `/readyz` bypass these admission limits.
+
 ## Tool Schemas
 
 All inputs are objects with no unknown fields or explicit null values. Identity,
@@ -158,4 +175,4 @@ provide a business-processing lease or crash-recovery guarantee.
 An inactive Codex/Claude process does not wake when a message arrives. These Go
 clients are explicitly running polling processes. Runners, webhooks and push
 activation belong to future OpenSpec work. The Go SDK client is exercised over
-real HTTP; other client configurations are documented from checks in change 5.
+real HTTP; see [verified Codex/Claude configuration](clients.md) for CLI checks.

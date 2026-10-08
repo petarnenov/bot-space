@@ -37,6 +37,54 @@ type Member struct {
 
 func ValidSlug(slug string) bool { return slugPattern.MatchString(slug) }
 
+func (s *Store) Get(ctx context.Context, workspaceID, actorID string) (Workspace, error) {
+	ctx, cancel := context.WithTimeout(ctx, OperationTimeout)
+	defer cancel()
+	var w Workspace
+	err := s.Pool.QueryRow(ctx, "SELECT w.id::text,w.slug,m.role FROM mailbox.workspaces w JOIN mailbox.memberships m ON m.workspace_id=w.id WHERE w.id=$1 AND m.user_id=$2", workspaceID, actorID).Scan(&w.ID, &w.Slug, &w.Role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Workspace{}, ErrForbidden
+	}
+	if err != nil {
+		return Workspace{}, ErrUnavailable
+	}
+	return w, nil
+}
+
+type TeamAgent struct {
+	ID, Name, OwnerID string
+	Active            bool
+}
+
+func (s *Store) TeamAgents(ctx context.Context, workspaceID, actorID string) ([]TeamAgent, error) {
+	ctx, cancel := context.WithTimeout(ctx, OperationTimeout)
+	defer cancel()
+	w, err := s.Get(ctx, workspaceID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if w.Role != "owner" && w.Role != "admin" {
+		return nil, ErrForbidden
+	}
+	rows, err := s.Pool.Query(ctx, "SELECT id::text,name,owner_user_id::text,active FROM mailbox.agents WHERE workspace_id=$1 ORDER BY created_at,id LIMIT 100", workspaceID)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	defer rows.Close()
+	out := []TeamAgent{}
+	for rows.Next() {
+		var a TeamAgent
+		if rows.Scan(&a.ID, &a.Name, &a.OwnerID, &a.Active) != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, a)
+	}
+	if rows.Err() != nil {
+		return nil, ErrUnavailable
+	}
+	return out, nil
+}
+
 func (s *Store) Bootstrap(ctx context.Context, githubID int64, slug string) (Workspace, error) {
 	if githubID < 1 || !ValidSlug(slug) {
 		return Workspace{}, ErrInvalid

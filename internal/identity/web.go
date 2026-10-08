@@ -16,10 +16,12 @@ const AttemptCookieName = "bot_space_oauth_state"
 
 type Routes interface{ Handle(string, http.Handler) }
 type Web struct {
-	Config     config.Identity
-	Sessions   *Sessions
-	Workspaces *workspaces.Store
-	Provider   Provider
+	Config            config.Identity
+	Sessions          *Sessions
+	Workspaces        *workspaces.Store
+	Provider          Provider
+	HomeRenderer      func(http.ResponseWriter, *http.Request, *Session)
+	WorkspaceRenderer func(http.ResponseWriter, *http.Request, Session)
 }
 
 func (w *Web) CookieName() string {
@@ -163,6 +165,15 @@ func (w *Web) logout(rw http.ResponseWriter, r *http.Request, _ Session) {
 var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><title>bot-space</title><body><h1>bot-space</h1>{{if .Session}}<p>Signed in as {{.Session.User.Username}} (GitHub ID {{.Session.User.GitHubID}})</p><form method="post" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{.Session.CSRF}}"><button>Log out</button></form><h2>Your workspaces</h2><ul>{{range .Workspaces}}<li><a href="/workspaces/{{.ID}}">{{.Slug}}</a> — {{.Role}}</li>{{else}}<li>No workspace memberships. Ask an administrator for an invitation.</li>{{end}}</ul><h2>Accept an invitation</h2><form method="post" action="/invitations/accept"><input type="hidden" name="csrf_token" value="{{.Session.CSRF}}"><label>Invitation ID <input name="invitation_id" required></label><label>Invitation secret <input name="secret" required autocomplete="off"></label><button>Accept invitation</button></form>{{else}}<p>Private team mailbox.</p><a href="/auth/github/login">Sign in with GitHub</a>{{end}}</body></html>`))
 
 func (w *Web) home(rw http.ResponseWriter, r *http.Request) {
+	if w.HomeRenderer != nil {
+		session, err := w.Session(r)
+		if err != nil {
+			w.HomeRenderer(rw, r, nil)
+		} else {
+			w.HomeRenderer(rw, r, &session)
+		}
+		return
+	}
 	var data struct {
 		Session    *Session
 		Workspaces []workspaces.Workspace
@@ -183,6 +194,10 @@ func (w *Web) home(rw http.ResponseWriter, r *http.Request) {
 var membersTemplate = template.Must(template.New("members").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Workspace members</title><body><a href="/">Workspaces</a><h1>Workspace members</h1><ul>{{range .}}<li>{{.Username}} (GitHub ID {{.GitHubID}}) — {{.Role}}</li>{{end}}</ul></body></html>`))
 
 func (w *Web) workspace(rw http.ResponseWriter, r *http.Request, session Session) {
+	if w.WorkspaceRenderer != nil {
+		w.WorkspaceRenderer(rw, r, session)
+		return
+	}
 	members, err := w.Workspaces.Members(r.Context(), r.PathValue("workspaceID"), session.User.ID)
 	if err != nil {
 		http.Error(rw, "Workspace unavailable", http.StatusForbidden)
@@ -198,5 +213,10 @@ func (w *Web) acceptInvitation(rw http.ResponseWriter, r *http.Request, session 
 		http.Error(rw, "Invitation cannot be accepted", http.StatusForbidden)
 		return
 	}
+	pendingName := "bot_space_pending_invitation"
+	if w.Config.SecureCookies {
+		pendingName = "__Host-" + pendingName
+	}
+	w.setCookie(rw, pendingName, "", -1)
 	http.Redirect(rw, r, "/workspaces/"+workspace.ID, http.StatusSeeOther)
 }

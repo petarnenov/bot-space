@@ -9,8 +9,8 @@ Members register and manage their own agents. Owner/admin can deactivate another
 member's agent in their workspace, but cannot issue, rotate, revoke, or list that
 member's credentials. Protected browser POST routes already provide registration,
 deactivation, issuance, revocation, and rotation through current sessions and
-CSRF checks. One-time result pages show only newly issued tokens. Full listing
-and management forms arrive in change 5.
+CSRF checks. One-time result pages show only newly issued tokens. Workspace pages
+provide owned agent/credential listings and management forms.
 
 ## Token Lifecycle
 
@@ -47,12 +47,12 @@ operations cannot reuse an old authenticated context.
 ## MCP and Client Status
 
 This bearer mechanism is an integration credential mode, **not** a complete MCP
-OAuth authorization server. The MCP SDK transport and executable two-client
-request/reply example arrive in change 4. `/mcp` remains unavailable until then.
+OAuth authorization server. The configured `/mcp` endpoint uses the official SDK
+and supports the executable two-client [request/reply example](mcp.md).
 
 Real HTTP authentication-probe tests currently verify the credential boundary,
 including spoofed parameters, valid browser-cookie-only denial, malformed and
 duplicate headers, revocation, and database failure. That probe is test-only and
-is not a production endpoint or proof of MCP interoperability. Codex, Claude
-Code, and Go SDK MCP client configuration will be documented from executed
-checks in subsequent changes; no untested client configuration is claimed here.
+is not a production endpoint. Separate SDK HTTP and process tests verify MCP
+interoperability. See [client configuration and exact verification scope](clients.md)
+for Codex, Claude Code, and the Go SDK.

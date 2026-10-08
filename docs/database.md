@@ -48,5 +48,26 @@ Use a separate empty database for `RESTORE_DATABASE_URL`; do not point it at the
 live database. Keep dump files outside this public repository and out of logs.
 Protect database URLs from shell history and process inspection in production.
 Verify the restored migration ledger and application readiness, then verify
-messages and credential state once those capabilities exist. A production backup
-and restore has not yet been executed.
+messages, idempotency, and active/revoked credential state. A production backup
+and restore has not been executed.
+
+## Verified Local Restore Drill
+
+The integration test uses `pg_dump` and `pg_restore` from the running PostgreSQL
+container. It backs up an isolated synthetic fixture, restores into a separate
+disposable database, and checks schema checksums, message identity/content,
+idempotent retry, active credentials, and rejection of revoked credentials.
+Cleanup removes only the disposable databases; the dump stays in process memory.
+
+```sh
+PG_BACKUP_CONTAINER="$(docker compose ps -q db)" \
+  TEST_DATABASE_URL="$DATABASE_URL" \
+  go test -race -count=1 -run TestPostgresBackupRestore -v ./tests/integration
+```
+
+Run after starting the Compose database and exporting the local `DATABASE_URL`.
+The test passed locally against PostgreSQL 18.6. CI supplies its PostgreSQL
+service container ID so the drill runs rather than skips. Without that variable,
+the test reports an explicit skip. This proves the local logical restore path;
+production scheduling, retention, encryption, and Railway backup execution remain
+the deployment operator's responsibility.

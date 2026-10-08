@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +19,8 @@ import (
 	"github.com/petarnenov/bot-space/internal/identity"
 	"github.com/petarnenov/bot-space/internal/mailbox"
 	"github.com/petarnenov/bot-space/internal/mcpserver"
+	"github.com/petarnenov/bot-space/internal/ratelimit"
+	management "github.com/petarnenov/bot-space/internal/web"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 	"github.com/petarnenov/bot-space/migrations"
 )
@@ -84,10 +87,13 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	server := httpserver.New(func(ctx context.Context) error { return database.Ready(ctx, pool, versions) }, logger)
+	loginLimit, mcpPeerLimit := ratelimit.New(20, 5, 10000, nil), ratelimit.New(120, 60, 10000, nil)
+	server.Use(func(next http.Handler) http.Handler { return ratelimit.PeerAdmission(loginLimit, mcpPeerLimit, next) })
 	if identityConfig.Enabled {
 		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
 		web.Register(server)
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
+		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, MailboxEnabled: mailboxConfig.Enabled}).Register(server)
 	}
 	if mailboxConfig.Enabled {
 		store, err := mailbox.New(pool, mailboxConfig.CursorKey)
