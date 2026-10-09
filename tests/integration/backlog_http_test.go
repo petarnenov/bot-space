@@ -39,7 +39,6 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 		t.Helper()
 		request, _ := http.NewRequest(method, server.URL+path, strings.NewReader(form.Encode()))
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		if cookie {
 			request.AddCookie(&http.Cookie{Name: browser.CookieName(), Value: secret})
 		} else {

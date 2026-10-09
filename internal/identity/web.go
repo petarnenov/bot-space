@@ -113,10 +113,11 @@ func (w *Web) sameOrigin(r *http.Request) bool {
 		u, err := url.Parse(referer)
 		return err == nil && u.Scheme != "" && u.User == nil && u.Scheme+"://"+u.Host == w.Config.BaseURL
 	}
-	// Referrer-Policy intentionally suppresses Referer. Modern browsers still
-	// send Fetch Metadata, which identifies a same-origin form submission
-	// without disclosing the page URL. The CSRF token remains mandatory.
-	return r.Header.Get("Sec-Fetch-Site") == "same-origin"
+	// Referrer-Policy intentionally suppresses Referer, and some browsers or
+	// proxies omit Fetch Metadata. In that case the session-bound CSRF token is
+	// the mutation proof. Explicit cross-site metadata is still rejected.
+	site := r.Header.Get("Sec-Fetch-Site")
+	return site == "" || site == "same-origin"
 }
 
 func (w *Web) login(rw http.ResponseWriter, r *http.Request) {

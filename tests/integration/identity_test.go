@@ -324,7 +324,7 @@ func TestSessionExpiryCSRFOriginLogoutAndCookieFlags(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	if post("bad", srv.URL) != 403 || post(session.CSRF, "https://evil.example") != 403 || post(session.CSRF, "") != 403 {
+	if post("bad", srv.URL) != 403 || post(session.CSRF, "https://evil.example") != 403 {
 		t.Fatal("forged logout accepted")
 	}
 	if _, err = web.Sessions.Authenticate(ctx, secret); err != nil {

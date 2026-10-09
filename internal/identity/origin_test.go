@@ -7,9 +7,13 @@ import (
 	"github.com/petarnenov/bot-space/internal/config"
 )
 
-func TestSameOriginAcceptsBrowserFetchMetadataWithoutReferrer(t *testing.T) {
+func TestSameOriginAcceptsMissingBrowserMetadata(t *testing.T) {
 	web := &Web{Config: config.Identity{BaseURL: "https://app.example"}}
 	request := httptest.NewRequest("POST", "https://app.example/objectives", nil)
+	if !web.sameOrigin(request) {
+		t.Fatal("browser request rejected without origin metadata")
+	}
+
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	if !web.sameOrigin(request) {
 		t.Fatal("same-origin browser request rejected without Referer")
