@@ -50,3 +50,24 @@ and outgoing size bounds, independent bidirectional traffic, reconnect cursor,
 role rejection and revocation in both directions using an explicit in-memory
 backend fixture. It does not prove durable storage or Railway ingress support.
 Follow the official [gRPC Go generation guide](https://grpc.io/docs/languages/go/quickstart/).
+
+## Public ingress evidence (2026-10-09)
+
+The native Go client failed through `bot-space-production.up.railway.app:443`
+on deployment `cf343487-7f56-4aed-98e4-d3c9e27bbbb8`. The edge returned HTTP
+505; Railway request logs identified downstream HTTP/2.0 and upstream HTTP/1.1
+to application port 8080. Local h2c tests passed, so public edge HTTP/2 alone
+does not provide native gRPC transport to this listener. Unary authentication,
+trailers and bidirectional public behavior remain unverified. Existing health,
+readiness, GitHub login and unauthenticated MCP returned 200, 200, 302 and 401.
+
+The diagnostic token is removed after this unsuccessful probe. Its synthetic
+transport events do not prove persistence or operational enrollment. The next
+transport candidate is a separate TLS gRPC listener through Railway's TCP
+proxy; it must be implemented and tested before replacing this failed route.
+The browser/MCP HTTPS address remains unchanged. Do not silently substitute
+gRPC-Web, WebSocket or an unverified HTTP gateway for native gRPC.
+
+The HTTP/2 dependency is pinned to `golang.org/x/net v0.60.0`, fixing the five
+module vulnerabilities reported by the probe CI run. Module vulnerability scan
+and affected race tests pass after the update; hosted CI must also pass.
