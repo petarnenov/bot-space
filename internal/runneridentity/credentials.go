@@ -40,6 +40,24 @@ func (s *Store) Challenge(ctx context.Context, id, purpose string) (Challenge, e
 	if err != nil {
 		return Challenge{}, ErrUnavailable
 	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return Challenge{}, ErrUnavailable
+	}
+	defer rollback(tx)
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", id); err != nil {
+		return Challenge{}, ErrUnavailable
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM mailbox.runner_key_challenges WHERE expires_at<=clock_timestamp() AND (enrollment_id=$1 OR runner_id=$1)`, id); err != nil {
+		return Challenge{}, ErrUnavailable
+	}
+	var outstanding int
+	if err = tx.QueryRow(ctx, `SELECT count(*) FROM mailbox.runner_key_challenges WHERE enrollment_id=$1 OR runner_id=$1`, id).Scan(&outstanding); err != nil {
+		return Challenge{}, ErrUnavailable
+	}
+	if outstanding >= 16 {
+		return Challenge{}, ErrUnavailable
+	}
 	var out Challenge
 	out.Nonce = nonce
 	var query string
@@ -52,8 +70,11 @@ func (s *Store) Challenge(ctx context.Context, id, purpose string) (Challenge, e
  SELECT $2,r.id,'refresh' FROM mailbox.project_runners r JOIN mailbox.orchestration_projects p ON p.id=r.project_id
  WHERE r.id=$1 AND r.active AND p.active RETURNING expires_at`
 	}
-	if err = s.Pool.QueryRow(ctx, query, id, security.Hash(nonce)).Scan(&out.ExpiresAt); err != nil {
+	if err = tx.QueryRow(ctx, query, id, security.Hash(nonce)).Scan(&out.ExpiresAt); err != nil {
 		return Challenge{}, ErrUnauthenticated
+	}
+	if tx.Commit(ctx) != nil {
+		return Challenge{}, ErrUnavailable
 	}
 	return out, nil
 }

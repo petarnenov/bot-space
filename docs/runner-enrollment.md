@@ -2,8 +2,7 @@
 
 The startup flow binds a machine Ed25519 key, project and role to a verified
 GitHub identity. This implementation is in progress: signing primitives, durable enrollment, one-use challenge consumption and
-credential issuance/refresh are implemented; browser callback wiring and startup
-CLI integration remain pending under OpenSpec task 3.2. No production enrollment endpoint is claimed.
+credential issuance/refresh are implemented; startup CLI and production server configuration integration remain pending under OpenSpec task 3.2. No production enrollment endpoint is claimed.
 
 ## Implemented boundaries
 
@@ -53,3 +52,20 @@ the runtime must refresh while arbitrarily long work continues. Authentication
 checks active project/runner, current epoch, role, owner and GitHub authority
 before accepting each operation. A lost issuance response requires a new
 challenge; reusing the old signature cannot deliver another credential.
+
+## HTTP and OAuth callback
+
+Runneridentity.Web registers strict bounded JSON machine endpoints for begin,
+challenge and credential issuance. Signed machine routes reject browser cookies
+and Origin headers and have per-peer/global admission limits. Pending challenge
+storage is bounded per resource and removes expired challenges. The ordinary
+success page is informational and cannot authorize enrollment.
+
+The identity callback invokes AfterGitHubLogin only after state-cookie/PKCE
+validation, one-use OAuth attempt consumption and provider identity verification.
+The runner hook forces repository admission for the enrollment's immutable
+project/role/key. A machine-only credential response includes the authenticated
+control endpoint and public CA, preserving TLS hostname/chain validation.
+Real-PG/fake-provider HTTP tests prove a collaborator without mailbox membership
+can enroll, while replay and cross-origin requests are denied. Production wiring
+and real runner startup remain unfinished; task 3.2 is not complete.

@@ -35,7 +35,7 @@
 
 ## 7. Local client adapters
 
-- [ ] 7.1 Implement startup provider/model/effort selection with CLI precedence, durable effective settings and capability validation; verify command routing, invalid combinations and exact resume settings and document usage.
+- [ ] 7.1 Implement startup provider/model/effort selection with CLI precedence, durable effective settings and capability validation; verify omitted settings preserve client defaults, live catalog/model-specific effort choices, invalid settings start no work session, command routing and exact resume settings and document usage.
 - [ ] 7.2 Finish Codex and Claude adapters and real authenticated exact-session smoke checks; verify structured results, local permissions, credential separation and architect-question continuation and document tested versions.
 - [ ] 7.3 Finish Copilot adapter on machine 192.168.1.223 through VPN; verify authenticated execution, selected settings, exact-session continuation and returned evidence and document tested capabilities.
 - [ ] 7.4 Implement Hermes adapter from its verified installed CLI/API contract; verify capability negotiation, startup settings, structured results and exact-session continuation and document reproducible installation/smoke evidence.

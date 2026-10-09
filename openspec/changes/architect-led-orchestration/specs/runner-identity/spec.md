@@ -52,3 +52,16 @@ Startup SHALL select client, default model and effort per runner, with CLI prece
 - **GIVEN** one architect runner using several model sessions
 - **WHEN** opinions or votes are submitted
 - **THEN** that registered member has one vote and cannot multiply the council quorum.
+
+### Requirement: Defaults and startup rejection with choices
+When model or effort is omitted, the runner SHALL preserve the selected client's own default for that setting. Explicit settings SHALL be checked against the client's current model catalog and model-specific effort capabilities before starting any work session. Invalid model/effort SHALL prevent startup and display the available valid choices. No silent fallback SHALL occur. An unverifiable catalog SHALL produce a clear configuration error rather than assume a requested combination is valid.
+
+#### Scenario: Omitted inference settings
+- **GIVEN** a selected local coding client with its own configuration
+- **WHEN** startup omits model and effort overrides
+- **THEN** no overrides are injected and the client uses its own defaults.
+
+#### Scenario: Invalid explicit inference setting
+- **GIVEN** an explicitly selected model or effort unsupported by the chosen client/model
+- **WHEN** startup validation runs
+- **THEN** no work session starts and the error lists the valid available model/effort choices.

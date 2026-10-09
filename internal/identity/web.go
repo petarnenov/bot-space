@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -22,6 +23,7 @@ type Web struct {
 	Provider          Provider
 	HomeRenderer      func(http.ResponseWriter, *http.Request, *Session)
 	WorkspaceRenderer func(http.ResponseWriter, *http.Request, Session)
+	AfterGitHubLogin  func(context.Context, workspaces.User, string) error
 }
 
 func (w *Web) CookieName() string {
@@ -143,6 +145,12 @@ func (w *Web) callback(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(rw, "GitHub authentication failed", http.StatusUnauthorized)
 		return
+	}
+	if w.AfterGitHubLogin != nil {
+		if err := w.AfterGitHubLogin(r.Context(), user, security.SafeReturn(path)); err != nil {
+			http.Error(rw, "Runner enrollment could not be verified", http.StatusForbidden)
+			return
+		}
 	}
 	_, secret, err := w.Sessions.Login(r.Context(), user.GitHubID, user.Username, w.cookie(r, w.CookieName()))
 	if err != nil {
