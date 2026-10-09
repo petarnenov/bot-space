@@ -39,3 +39,27 @@ presence expiry. Contract-validation fixtures are seeded for storage tests;
 actual Git/OpenSpec validation is independently verified by the contract test.
 Run `go test -race ./tests/integration -run TestDurableCouncil` with
 `TEST_DATABASE_URL` and the pinned repository toolchain.
+
+## Durable attempts and session binding
+
+Migration 0014 adds numbered attempts with a saved native session and a renewable
+90-second authority lease. It is currently tested only in isolated databases.
+`Begin` requires the assigned project executor, its exact client configuration,
+current majority plan/allocation, live presence and the same reserved machine
+slot/generation. Repeating Begin returns the same first attempt. An interrupted
+or expired attempt cannot be replaced with a new context through this method.
+
+The runner captures the actual native client session and calls `BindSession`.
+A different session is rejected, including by a database trigger. `Renew` checks
+the saved session, authority epoch, current root/spec/plan, slot and presence.
+It renews starting, running and question-wait authority. Starting can renew before
+the native session has been reported, so initialization has no total time budget.
+Renewal after authority loss fails; capacity remains occupied for reconciliation.
+
+Tests verify idempotent Begin, cross-project denial, client/session replacement
+denial, immutable session storage, same-session renewals while waiting, and no
+fresh context after expiry. Old assignment/attempt creation timestamps demonstrate
+that the database gate imposes no legacy execution-age cap. This is not a claim
+of actual two-day native provider execution. Native adapters, local persistence,
+lease-loss observation, majority-backed retry/reconciliation and session-bound
+questions/results still need integration before tasks 6.1–6.3 are complete.

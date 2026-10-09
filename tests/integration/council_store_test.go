@@ -487,6 +487,69 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	if err = allocator.Presence(ctx, executorTokens[0], true, changedClient); !errors.Is(err, workallocation.ErrOccupied) {
 		t.Fatal("occupied machine switched providers", err)
 	}
+	executorToken := executorTokens[0]
+	wrongScopeToken := executorTokens[1]
+	if accepted.assignment.Project == foreignProject {
+		executorToken, wrongScopeToken = wrongScopeToken, executorToken
+	}
+	workAttempt, err := allocator.Begin(ctx, executorToken, accepted.assignment.ID, client)
+	if err != nil || workAttempt.Number != 1 || workAttempt.Session != "" || workAttempt.State != "starting" {
+		t.Fatal("initial attempt failed", err)
+	}
+	retryAttempt, err := allocator.Begin(ctx, executorToken, accepted.assignment.ID, client)
+	if err != nil || retryAttempt.ID != workAttempt.ID {
+		t.Fatal("begin retry reset context", err)
+	}
+	if _, err = allocator.Begin(ctx, wrongScopeToken, accepted.assignment.ID, client); !errors.Is(err, workallocation.ErrForbidden) {
+		t.Fatal("another project started the assignment", err)
+	}
+	if _, err = allocator.Begin(ctx, executorToken, accepted.assignment.ID, changedClient); !errors.Is(err, workallocation.ErrInvalid) {
+		t.Fatal("attempt switched provider settings", err)
+	}
+	if _, err = allocator.Renew(ctx, executorToken, accepted.assignment.ID, "", workAttempt.AuthorityEpoch); err != nil {
+		t.Fatal("native initialization could not keep authority alive", err)
+	}
+	bound, err := allocator.BindSession(ctx, executorToken, accepted.assignment.ID, "native-fixture-session", workAttempt.AuthorityEpoch)
+	if err != nil || bound.State != "running" || bound.Session != "native-fixture-session" {
+		t.Fatal("session binding failed", err)
+	}
+	if _, err = allocator.BindSession(ctx, executorToken, accepted.assignment.ID, "another-session", workAttempt.AuthorityEpoch); !errors.Is(err, workallocation.ErrInvalid) {
+		t.Fatal("session replacement allowed", err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_attempts SET session_id='rewritten' WHERE id=$1`, workAttempt.ID); err == nil {
+		t.Fatal("database session replacement allowed")
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_assignments SET created_at=clock_timestamp()-interval '2 days' WHERE id=$1`, accepted.assignment.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_attempts SET created_at=clock_timestamp()-interval '2 days' WHERE id=$1`, workAttempt.ID); err != nil {
+		t.Fatal(err)
+	}
+	renewed, err := allocator.Renew(ctx, executorToken, accepted.assignment.ID, bound.Session, workAttempt.AuthorityEpoch)
+	if err != nil || renewed.ID != workAttempt.ID || renewed.Session != bound.Session {
+		t.Fatal("old task age imposed execution deadline", err)
+	}
+	if _, err = allocator.Renew(ctx, executorToken, accepted.assignment.ID, "wrong-session", workAttempt.AuthorityEpoch); !errors.Is(err, workallocation.ErrInvalid) {
+		t.Fatal("wrong session renewed authority", err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_assignments SET state='question_wait' WHERE id=$1`, accepted.assignment.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_attempts SET state='question_wait' WHERE id=$1`, workAttempt.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = allocator.Renew(ctx, executorToken, accepted.assignment.ID, bound.Session, workAttempt.AuthorityEpoch); err != nil {
+		t.Fatal("question wait lost same-session authority", err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_attempts SET authority_until=clock_timestamp()-interval '1 second' WHERE id=$1`, workAttempt.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = allocator.Renew(ctx, executorToken, accepted.assignment.ID, bound.Session, workAttempt.AuthorityEpoch); !errors.Is(err, workallocation.ErrAuthorityLost) {
+		t.Fatal("expired authority was resurrected", err)
+	}
+	if _, err = allocator.Begin(ctx, executorToken, accepted.assignment.ID, client); !errors.Is(err, workallocation.ErrAuthorityLost) {
+		t.Fatal("interruption created a fresh task context", err)
+	}
 	for _, state := range []string{"question_wait", "interrupted"} {
 		if _, err = pool.Exec(ctx, `UPDATE mailbox.work_assignments SET state=$2 WHERE id=$1`, accepted.assignment.ID, state); err != nil {
 			t.Fatal(err)
