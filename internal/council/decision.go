@@ -78,6 +78,10 @@ type Decision struct {
 	material Material
 }
 
+// Material returns immutable source references for persistence and replacement
+// checks. The server must resolve these references from authoritative records.
+func (d *Decision) Material() Material { return d.material }
+
 func digest(value any) string {
 	b, _ := json.Marshal(value)
 	h := sha256.Sum256(b)
