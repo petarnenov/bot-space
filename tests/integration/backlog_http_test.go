@@ -39,7 +39,7 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 		t.Helper()
 		request, _ := http.NewRequest(method, server.URL+path, strings.NewReader(form.Encode()))
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		request.Header.Set("Origin", server.URL)
+		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		if cookie {
 			request.AddCookie(&http.Cookie{Name: browser.CookieName(), Value: secret})
 		} else {
@@ -63,8 +63,29 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if response.StatusCode != 403 {
 		t.Fatal("invalid CSRF admitted")
 	}
+	raw, _ := io.ReadAll(response.Body)
+	if !strings.Contains(string(raw), "This form expired") {
+		t.Fatal("invalid CSRF returned the wrong error", string(raw))
+	}
 	response.Body.Close()
 	form.Set("csrf_token", session.CSRF)
+	request, _ := http.NewRequest("POST", server.URL+intakePath, strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Origin", "https://evil.example")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.AddCookie(&http.Cookie{Name: browser.CookieName(), Value: secret})
+	response, err = (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatal("foreign Origin overrode by Fetch Metadata", response.StatusCode)
+	}
+	raw, _ = io.ReadAll(response.Body)
+	if !strings.Contains(string(raw), "did not come from the application") {
+		t.Fatal("invalid origin returned the wrong error", string(raw))
+	}
+	response.Body.Close()
 	response = call("POST", intakePath, form, true)
 	if response.StatusCode != 303 {
 		t.Fatal("human input rejected", response.StatusCode)
@@ -72,7 +93,7 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	location := response.Header.Get("Location")
 	response.Body.Close()
 	response = call("GET", location, nil, true)
-	raw, _ := io.ReadAll(response.Body)
+	raw, _ = io.ReadAll(response.Body)
 	response.Body.Close()
 	if response.StatusCode != 200 || strings.Contains(string(raw), "<script>") || !strings.Contains(string(raw), "&lt;script&gt;") {
 		t.Fatal("unsafe rendering")
