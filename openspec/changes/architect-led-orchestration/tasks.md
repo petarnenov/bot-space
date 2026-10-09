@@ -24,13 +24,13 @@
 
 - [ ] 5.1 Persist council snapshots, rounds, votes and accepted commits transactionally with authorization; verify concurrent coordinator/vote races and material reconsideration in real PG and document state transitions.
 - [ ] 5.2 Implement durable outbox, runner cursors, local ACK-after-persist and deduplicated replay; verify disconnect/restart around acknowledgement and bounded backpressure tests and document delivery guarantees.
-- [ ] 5.3 Implement architect proposal/discussion/voting sessions and coordination without human intervention; verify independently authenticated councils, missing members, ties and three-round blocking with provider fixtures and document the runtime.
+- [ ] 5.3 Implement architect proposal/discussion/voting sessions and coordination without human intervention; verify fresh seeded sessions per decision, exact-session retention across rounds, isolated parallel questions, independently authenticated councils, missing members, ties and three-round blocking with provider fixtures and document the runtime.
 
 ## 6. Single-task executor allocation
 
 - [ ] 6.1 Implement atomic majority-backed assignment with exactly one reserved task per executor across providers/projects, including waiting questions and uncertain interruptions; verify concurrent assignment and occupied-slot tests and document availability.
 - [ ] 6.2 Remove execution deadlines, inherited budgets and duration-based provider cancellation while retaining renewable authority leases; verify healthy execution beyond former limits and interrupted-authority reconciliation tests and document the distinction.
-- [ ] 6.3 Implement question decisions bound to contract/attempt/session and exact continuation after accepted answers; verify stale answers, reconnect and occupied-slot behavior and document the local bridge.
+- [ ] 6.3 Implement question decisions bound to contract/attempt/session and exact continuation after accepted answers; verify fresh sessions between tasks, retained context for same-task questions/review, stale answers, reconnect and occupied-slot behavior and document the local bridge.
 - [ ] 6.4 Implement artifact/evidence return, council review and safe retry/reassignment; verify late-result fencing, uncertain side effects and failed-evidence rejection without human approval and document recovery.
 
 ## 7. Local client adapters

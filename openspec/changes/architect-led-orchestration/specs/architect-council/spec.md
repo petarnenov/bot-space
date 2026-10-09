@@ -53,3 +53,11 @@ An authenticated assigned executor SHALL ask a question referencing its current 
 - **GIVEN** a running work package and question
 - **WHEN** the council accepts an answer by strict majority
 - **THEN** the executor receives that answer in its saved context and continues without HUMAN intervention.
+
+### Requirement: Decision-scoped architect context
+Each architect SHALL start a fresh model session for a new decision/question, seeded with the current task/spec/commit, the question, factual evidence and relevant accepted decisions. That session SHALL retain context through all discussion rounds for that decision. Parallel decisions SHALL have separate sessions. Final decisions, rationale and votes SHALL persist before working context is released.
+
+#### Scenario: New question versus continuing discussion
+- **GIVEN** an architect finishing one decision and receiving another question
+- **WHEN** it starts the new discussion or continues the existing one
+- **THEN** the new question gets a clean seeded session, while additional rounds of the same discussion resume its retained exact session.

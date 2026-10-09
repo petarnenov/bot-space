@@ -58,3 +58,11 @@ An executor unable to complete work SHALL ask the architect council with task/co
 - **GIVEN** a task blocked by a failing check, ambiguity or missing capability
 - **WHEN** the executor asks architects for help
 - **THEN** the council receives the relevant attempted-work evidence and exact revision, decides autonomously, and the executor continues from its preserved session after an accepted answer.
+
+### Requirement: Task-scoped executor context
+An executor SHALL start a fresh model session for each new work package, seeded with its approved contract, spec, exact repository revision and relevant accepted decisions. Questions, council answers, review feedback and continuation within that task SHALL retain the exact session. Terminal artifacts/checks/commits SHALL be durably recorded before releasing working context; a new task SHALL not inherit an unrelated prior session.
+
+#### Scenario: Task completion and clarification
+- **GIVEN** an executor receiving a new task after its previous task terminates
+- **WHEN** it starts work and later asks architects for clarification
+- **THEN** the new task starts with a fresh seeded session and clarification resumes that same session without losing the attempted-work context.
