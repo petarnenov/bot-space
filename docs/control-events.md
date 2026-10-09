@@ -58,3 +58,43 @@ council and root-control publication, wrong ACK UUID/order, revoked access and
 backpressure without ACK. Native provider execution/resume remains tasks 5.3,
 6 and 7; deployment remains task 10. Delivery completion does not claim those
 runtime behaviors or a production rollout of migrations 0008–0017.
+
+
+## Resume checkpoint
+
+The user requested stopping after task 5.2 and resuming only on `continue`.
+Task 5.2 is implemented and verified against its full tracked delivery scope.
+Code checkpoint: `ca00f0c` on `openspec/architect-led-orchestration` in
+`/Users/petarnenov/bot-space-orchestration`. The task/documentation commit follows
+that checkpoint. OpenSpec progress is 9/30 complete, 21 remaining.
+
+Verification on a clean committed worktree passed `go vet ./...`,
+`go test -race ./...` with real PostgreSQL, `go build ./...`, and all 15 OpenSpec
+validation items. Native gRPC tests cover disconnect before ACK and restart of
+both backend/server objects and private local state; delivery and domain-state
+fixtures remain distinct from actual provider execution. AGENTS.md remains
+byte-identical to `da7285d`.
+
+Resume by inspecting the actual branch/status and running pinned OpenSpec apply
+instructions. Earlier open tasks 4.3 and 5.1 retain their partial foundations:
+creator lifecycle controls, plan/allocation/answer storage, one global executor
+slot, attempts and exact-session questions/answers. They still need operational
+reconciliation, review/retry/integration subjects and complete runtime wiring.
+Next work should finish those dependencies and task 5.3 autonomous architect
+sessions; continue groups 6–10, including five provider adapters, physical Copilot
+on 192.168.1.223 via VPN, worktree integration, UI, learning and final delivery.
+Do not reset completed delivery work or mark those pending tasks done.
+
+Production still has migrations through 0007 and the earlier backlog deployment.
+Migrations 0008–0017 and the new operational backend have only been verified in
+isolated test databases/local native tests. Production deployment and end-to-end
+native provider proof remain task 10. Keep GitHub OAuth credentials distinct from
+GitHub App metadata-verification credentials; never print private variables.
+
+Historical superseded prototype changes remain in the original shared workspace
+and as unstaged/untracked files in the orchestration worktree: `.env.example`,
+`compose.yaml`, old config/mailbox/MCP task additions, `internal/runner/`,
+`internal/tasks/`, old distributed-runner plan, historical reports/research and
+legacy task tests. They were present before this delivery task and are preserved;
+review them before reuse rather than publishing their obsolete deadline/human
+approval behavior or private notes. All delivery changes are committed separately.

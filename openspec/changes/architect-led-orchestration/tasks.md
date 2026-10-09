@@ -25,7 +25,7 @@
 ## 5. Durable council and control events
 
 - [ ] 5.1 Persist council snapshots, rounds, votes and accepted commits transactionally with authorization; verify concurrent coordinator/vote races and material reconsideration in real PG and document state transitions.
-- [ ] 5.2 Implement durable outbox, runner cursors, local ACK-after-persist and deduplicated replay; verify disconnect/restart around acknowledgement and bounded backpressure tests and document delivery guarantees.
+- [x] 5.2 Implement durable outbox, runner cursors, local ACK-after-persist and deduplicated replay; verify disconnect/restart around acknowledgement and bounded backpressure tests and document delivery guarantees.
 - [ ] 5.3 Implement architect proposal/discussion/voting sessions and coordination without human intervention; verify fresh seeded sessions per decision, exact-session retention across rounds, isolated parallel questions, independently authenticated councils, missing members, ties and three-round blocking with provider fixtures and document the runtime.
 
 ## 6. Single-task executor allocation
