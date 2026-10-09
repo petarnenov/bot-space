@@ -46,11 +46,18 @@
 - [ ] 8.1 Implement one OpenSpec branch/executor worktree per change, per-task commits/pushes with immediate architect notification and publication-pending recovery, and separate architect review worktrees fetched at the exact executor head, plus evidence-gated council acceptance, merge/deploy and OpenSpec synchronization/archive within configured authority; verify failing-check publication denial, push retries/remote conflicts without force-push, stale-head approval, dirty worktree preservation, changed main, failed checks and missing permissions block actions and document integration policy.
 - [ ] 8.2 Implement human intake/backlog and council/assignment/question/evidence/executor views with project isolation; verify rendering, CSRF, safe audit and absence of approval/override controls and document UI usage.
 
-## 9. Delivery verification
+## 9. Durable agent learning
 
-- [ ] 9.1 Verify HUMAN intake through planning, majority allocation, executor question/answer/resume, evidence review and authorized integration without human gates; run real-PG end-to-end/restart tests and preserve scenario evidence.
-- [ ] 9.2 Run repository gates and hosted CI, publish authorized source and deploy additive migrations/services; verify legacy mailbox compatibility, readiness and public native control with factual output.
-- [ ] 9.3 Verify physical Mac architect plus Copilot executor on 223 and same-host dual-role startup; record topology, long-work single-slot behavior, reconnect and final reviewed artifacts without claiming simulated machines are physical.
+- [ ] 9.1 Implement idempotent evidence-backed lesson candidates/revisions with project authorization and safe audit; verify real-PG restart, duplicate capture, cross-project isolation and bounded content tests and document lesson records.
+- [ ] 9.2 Implement majority-backed lesson promotion, explicit generalization and revision/revocation with correction-evidence gates; verify stale votes, missing evidence, rejected lessons and contradictory evidence tests and document transitions.
+- [ ] 9.3 Seed fresh architect/executor sessions with bounded applicable accepted lessons and record exact supplied revisions; verify rejected/revoked/unrelated lessons are excluded, budget limits and fresh-session isolation and document retrieval.
+- [ ] 9.4 Implement recurrence tracking and architect-approved revised mitigation before repeating known failure; verify a reproduced mistake links its supplied lesson and prevents blind retry, and document learning feedback.
+
+## 10. Delivery verification
+
+- [ ] 10.1 Verify HUMAN intake through planning, majority allocation, executor question/answer/resume, evidence review and authorized integration without human gates; run real-PG end-to-end/restart tests and preserve scenario evidence.
+- [ ] 10.2 Run repository gates and hosted CI, publish authorized source and deploy additive migrations/services; verify legacy mailbox compatibility, readiness and public native control with factual output.
+- [ ] 10.3 Verify physical Mac architect plus Copilot executor on 223 and same-host dual-role startup; record topology, long-work single-slot behavior, reconnect and final reviewed artifacts without claiming simulated machines are physical.
 
 ## Workflow follow-up
 

@@ -14,6 +14,7 @@ The user clarified that bot-space must autonomously execute HUMAN-submitted Open
 - Execution has no elapsed deadline or inherited time budget. Long-running healthy work remains active; technical connectivity and renewable lease checks do not expire tasks because of duration.
 - Executor questions trigger a separate council decision and resume the exact execution session after an authoritative answer.
 - Work packages refer to versioned human intent, OpenSpec artifacts, Git base revision and acceptance evidence. Architect decisions govern scope revisions, retries, review, merge and deployment within configured project authority.
+- Add durable evidence-backed lessons for architects and executors, with majority promotion, scoped retrieval for fresh sessions and recurrence tracking.
 - Add backlog/council/capacity/question/evidence views with explicit project permissions.
 - Preserve the existing mailbox and reuse verified transaction/idempotency/lease foundations. The old distributed-agent-runner plan is superseded, not completed or archived.
 
@@ -28,6 +29,7 @@ The user clarified that bot-space must autonomously execute HUMAN-submitted Open
 - work-allocation: Capability matching, capacity reservation, fenced execution and architect-authorized acceptance.
 - spec-governed-work: OpenSpec/repository revisions, evidence and autonomous integration.
 - project-observability: Project-authorized backlog, council and execution visibility.
+- agent-learning: Durable validated lessons, task/decision context retrieval, recurrence evidence and lesson revision.
 
 ### Modified Capabilities
 
