@@ -8,12 +8,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	pb "github.com/petarnenov/bot-space/api/control/v1"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/petarnenov/bot-space/internal/runneridentity"
 	"github.com/petarnenov/bot-space/internal/security"
@@ -41,14 +44,15 @@ func main() {
 // The full serve/control/provider runtime remains tracked separately. Enroll is
 // a concrete authentication entrypoint reused by automatic startup integration.
 func run(ctx context.Context, args []string, out io.Writer, open func(string) error) error {
-	if len(args) == 0 || args[0] != "enroll" {
-		return errors.New("usage: runner enroll --server ORIGIN --state ABSOLUTE_PATH --role architect|executor --project UUID [--project UUID]")
+	if len(args) == 0 || (args[0] != "enroll" && args[0] != "doctor") {
+		return errors.New("usage: runner enroll|doctor --server ORIGIN --state ABSOLUTE_PATH --role architect|executor --project UUID [--project UUID]")
 	}
-	flags := flag.NewFlagSet("enroll", flag.ContinueOnError)
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(out)
 	server := flags.String("server", "", "The Firm HTTPS origin")
 	stateDir := flags.String("state", "", "Private absolute role state directory")
 	role := flags.String("role", "", "architect or executor")
+	noOpen := flags.Bool("no-open", false, "Print verified GitHub sign-in URL for a headless machine")
 	var scopes projects
 	flags.Var(&scopes, "project", "Eligible project UUID; repeat for multiple projects")
 	if err := flags.Parse(args[1:]); err != nil {
@@ -76,15 +80,43 @@ func run(ctx context.Context, args []string, out io.Writer, open func(string) er
 	if err != nil {
 		return err
 	}
+	if *noOpen {
+		open = func(url string) error {
+			_, err := fmt.Fprintln(out, "Open GitHub sign-in:", url)
+			if err != nil {
+				return errors.New("login URL output unavailable")
+			}
+			return nil
+		}
+	}
 	seen := map[string]bool{}
 	for _, project := range scopes {
+		project = strings.ToLower(project)
 		if seen[project] {
 			continue
 		}
 		seen[project] = true
-		lease, err := session.Acquire(ctx, project, open)
+		var lease runneridentity.Lease
+		if args[0] == "doctor" {
+			lease, err = session.Refresh(ctx, project)
+		} else {
+			lease, err = session.Acquire(ctx, project, open)
+		}
 		if err != nil {
 			return err
+		}
+		if args[0] == "doctor" {
+			connection, native, err := runneridentity.DialNative(lease)
+			if err != nil {
+				return err
+			}
+			check, cancel := context.WithTimeout(ctx, 5*time.Second)
+			identity, err := native.Inspect(check, &pb.InspectRequest{ResourceId: lease.RunnerID})
+			cancel()
+			connection.Close()
+			if err != nil || identity.GetResourceId() != lease.RunnerID || identity.GetState() != "enrolled" {
+				return errors.New("native identity verification failed")
+			}
 		}
 		// Never encode the lease: it contains a private bearer token.
 		if err = json.NewEncoder(out).Encode(struct {

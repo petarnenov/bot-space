@@ -2,7 +2,7 @@
 
 The startup flow binds a machine Ed25519 key, project and role to a verified
 GitHub identity. This implementation is in progress: signing primitives, durable enrollment, one-use challenge consumption and
-credential issuance/refresh are implemented; startup CLI and production server configuration integration remain pending under OpenSpec task 3.2. No production enrollment endpoint is claimed.
+credential issuance/refresh are implemented; startup CLI and production server configuration integration remain pending under OpenSpec task 3.2. Production identity enrollment is verified below; full serve execution remains unfinished.
 
 ## Implemented boundaries
 
@@ -206,3 +206,21 @@ The native service pre-deploy setting was restored to `/mailbox migrate`.
 Health/readiness returned 200, GitHub login 302 and unauthenticated MCP 401.
 Runner identity/execution remain disabled pending authenticated native service
 and automatic serve integration; project bootstrap alone is not task completion.
+
+## Live automatic identity flow (2026-10-09)
+
+Deployment `9043e66b-b3d4-49f1-942d-0350c2eac02a` reached SUCCESS with GitHub
+App-backed HTTP enrollment and native TLS identity enabled. The real CLI
+`enroll --no-open` produced a verified same-server login URL; the existing
+GitHub browser session completed OAuth automatically. No invitation or manual
+server role grant occurred. Architect runner
+`71a80d7f-e92d-495f-83c1-7d114bc8e217` received epoch 1 for project
+`bb25680f-eeea-4cde-b229-ddec09961c73`.
+
+`runner doctor` then refreshed to epoch 2 and verified authenticated native TLS
+self-inspection through `thomas.proxy.rlwy.net:39004`, exiting 0. CLI output
+contained only runner/project/role/epoch; bearer and machine key stayed private.
+`--no-open` supports headless hosts without requiring desktop browser launch.
+Task/presence operations remain closed with FailedPrecondition until the durable
+work backend is installed. Automatic `serve` runtime is still pending, so
+OpenSpec task 3.2 is not checked off yet.

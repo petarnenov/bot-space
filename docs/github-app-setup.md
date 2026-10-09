@@ -42,5 +42,5 @@ The App variables were set privately on Railway service bot-space using stdin
 and skip-deploys. A live Go probe acquired a metadata-only installation token,
 verified immutable owner/repository IDs and received HTTP 200 from the direct
 collaborators endpoint (one current member). No token was disclosed. The probe
-source was removed after verification. RUNNER_IDENTITY_ENABLED remains disabled
-until the project registry/native authenticated service activation gates pass.
+source was removed after verification. RUNNER_IDENTITY_ENABLED was disabled at that checkpoint. Subsequent project
+bootstrap and native identity activation are recorded in runner-enrollment.md.
