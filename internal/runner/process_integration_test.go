@@ -98,10 +98,10 @@ func testTwoIndependentSupervisorsDelegateAndContinue(t *testing.T, providerA, p
 		t.Fatal(err)
 	}
 	var memberID string
-	if err = pool.QueryRow(ctx, "INSERT INTO mailbox.users (github_id,username) VALUES ($1,'member') RETURNING id::text", memberGitHubID).Scan(&memberID); err != nil {
+	if err = pool.QueryRow(ctx, "INSERT INTO mailbox.users (github_id,username) VALUES ($1,'member') ON CONFLICT (github_id) DO UPDATE SET github_id=EXCLUDED.github_id RETURNING id::text", memberGitHubID).Scan(&memberID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Exec(ctx, "INSERT INTO mailbox.memberships (workspace_id,user_id,role) VALUES ($1,$2,'member')", ownerWorkspace.ID, memberID); err != nil {
+	if _, err = pool.Exec(ctx, "INSERT INTO mailbox.memberships (workspace_id,user_id,role) VALUES ($1,$2,'member') ON CONFLICT (workspace_id,user_id) DO NOTHING", ownerWorkspace.ID, memberID); err != nil {
 		t.Fatal(err)
 	}
 	agentsStore := &agents.Store{Pool: pool}
