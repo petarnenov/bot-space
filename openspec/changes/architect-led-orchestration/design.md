@@ -105,3 +105,7 @@ For each completed small implementation task, commit and push to the change bran
 ### Executor blocker context
 
 `ask_architects` carries task/contract/attempt/session references, exact branch/commit, attempted approaches, bounded relevant diff/artifact references, factual checks/errors and a precise decision request. Redact credentials/secrets. Preserve the single-slot reservation and exact model session while the council discusses. An accepted version-bound answer resumes that session; no human operational escalation or fabricated completion replaces council resolution.
+
+### Verified ingress constraint and selected transport candidate
+
+A public test on deployment `cf343487-7f56-4aed-98e4-d3c9e27bbbb8` returned HTTP 505. Railway request logs prove HTTP/2.0 downstream but HTTP/1.1 upstream on the HTTPS domain. Select a separate native TLS listener on 9090 behind the same service's TCP proxy for the next proof, preserving existing browser/MCP HTTPS. Verify server hostname and CA; do not disable TLS checks. The HTTPS-authenticated enrollment response will bind the trusted control endpoint/CA to avoid another manual grant. This candidate is not declared working until the real native client proves calls, trailers, bidirectional traffic and reconnect.

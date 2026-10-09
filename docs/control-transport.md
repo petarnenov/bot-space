@@ -71,3 +71,28 @@ gRPC-Web, WebSocket or an unverified HTTP gateway for native gRPC.
 The HTTP/2 dependency is pinned to `golang.org/x/net v0.60.0`, fixing the five
 module vulnerabilities reported by the probe CI run. Module vulnerability scan
 and affected race tests pass after the update; hosted CI must also pass.
+
+## Native TLS listener candidate
+
+A separate listener on port 9090 uses grpc-go directly behind Railway's TCP
+proxy, preserving HTTP/2 framing. `CONTROL_TLS_CERT` and `CONTROL_TLS_KEY` hold
+server-side PEM material. With both configured and `CONTROL_PROBE_TOKEN` set,
+the synthetic probe uses this listener instead of wrapping the legacy HTTP
+server. This is diagnostic authentication only, not runner enrollment.
+
+The native client accepts `--ca-file /private/control-ca.pem` and verifies the
+certificate chain and endpoint hostname. It never uses InsecureSkipVerify for
+public connections. A future authenticated HTTPS enrollment response must bind
+the configured control endpoint and CA so collaborators do not need another
+invitation or manual credential grant. Certificate renewal is a separate
+operator configuration concern; the diagnostic certificate is temporary.
+
+```sh
+go run ./cmd/control-probe --endpoint thomas.proxy.rlwy.net:39004 --ca-file /private/control-ca.pem
+```
+
+Supply the temporary probe token through `CONTROL_PROBE_TOKEN`; never put it in
+arguments or tracked configuration. A successful JSON result must explicitly
+prove unary, status trailers, bidirectional traffic and reconnect. Local tests
+verify trusted TLS succeeds and an untrusted certificate is rejected. Public
+TCP proof remains pending until the deployed client completes successfully.

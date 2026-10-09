@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -31,6 +32,7 @@ func main() {
 }
 func run() error {
 	endpoint := flag.String("endpoint", "", "gRPC host:port")
+	caFile := flag.String("ca-file", "", "Trusted control CA certificate file")
 	local := flag.Bool("local-plaintext", false, "Allow plaintext loopback test only")
 	flag.Parse()
 	if flag.NArg() != 0 || *endpoint == "" {
@@ -40,7 +42,19 @@ func run() error {
 	if len(token) < 32 {
 		return errors.New("private probe token unavailable")
 	}
-	var creds credentials.TransportCredentials = credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if *caFile != "" {
+		pem, err := os.ReadFile(*caFile)
+		if err != nil {
+			return errors.New("control CA unavailable")
+		}
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(pem) {
+			return errors.New("invalid control CA")
+		}
+		tlsConfig.RootCAs = roots
+	}
+	var creds credentials.TransportCredentials = credentials.NewTLS(tlsConfig)
 	if *local {
 		host, _, err := net.SplitHostPort(*endpoint)
 		ip := net.ParseIP(host)

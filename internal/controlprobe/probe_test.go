@@ -2,7 +2,10 @@ package controlprobe
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +15,7 @@ import (
 	pb "github.com/petarnenov/bot-space/api/control/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -86,5 +90,48 @@ func TestProbeNativeH2CWithLegacyHTTPAndNoTaskMutation(t *testing.T) {
 	}
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatal("probe accepted task mutation", err)
+	}
+}
+
+func TestNativeTLSCertificateVerification(t *testing.T) {
+	certificateSource := httptest.NewTLSServer(http.NotFoundHandler())
+	pair := certificateSource.TLS.Certificates[0]
+	certificateSource.Close()
+	roots := x509.NewCertPool()
+	cert, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots.AddCert(cert)
+	server, err := New(strings.Repeat("x", 32), grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+	go server.Serve(listener)
+	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+strings.Repeat("x", 32)))
+	result, err := pb.NewControlClient(conn).Inspect(ctx, &pb.InspectRequest{ResourceId: "verified-tls"})
+	if err != nil || result.GetState() != "transport_probe" {
+		t.Fatal("verified TLS failed", err)
+	}
+	wrong, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{RootCAs: x509.NewCertPool(), MinVersion: tls.VersionTLS12})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrong.Close()
+	_, err = pb.NewControlClient(wrong).Inspect(ctx, &pb.InspectRequest{ResourceId: "untrusted"})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatal("untrusted certificate accepted", err)
 	}
 }

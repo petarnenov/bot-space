@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,6 +26,8 @@ import (
 	management "github.com/petarnenov/bot-space/internal/web"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 	"github.com/petarnenov/bot-space/migrations"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func main() {
@@ -103,18 +107,49 @@ func run(logger *slog.Logger) error {
 		}
 		server.Handle("/mcp", mcpserver.New(store, mailboxConfig.AllowedOrigins))
 	}
+	grpcFailure := make(chan error, 1)
 	if token := os.Getenv("CONTROL_PROBE_TOKEN"); token != "" {
-		handler, shutdown, err := controlprobe.Wrap(server.HTTP.Handler, token)
-		if err != nil {
-			return err
+		cert, key := os.Getenv("CONTROL_TLS_CERT"), os.Getenv("CONTROL_TLS_KEY")
+		if cert != "" || key != "" {
+			pair, err := tls.X509KeyPair([]byte(cert), []byte(key))
+			if err != nil {
+				return errors.New("invalid control TLS configuration")
+			}
+			rpc, err := controlprobe.New(token, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12})))
+			if err != nil {
+				return err
+			}
+			listener, err := net.Listen("tcp", "0.0.0.0:9090")
+			if err != nil {
+				return errors.New("control listener unavailable")
+			}
+			defer rpc.Stop()
+			defer listener.Close()
+			go func() {
+				if err := rpc.Serve(listener); err != nil && ctx.Err() == nil {
+					grpcFailure <- errors.New("control serving failed")
+					stop()
+				}
+			}()
+		} else {
+			handler, shutdown, err := controlprobe.Wrap(server.HTTP.Handler, token)
+			if err != nil {
+				return err
+			}
+			defer shutdown()
+			server.HTTP.Handler = handler
 		}
-		defer shutdown()
-		server.HTTP.Handler = handler
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.Port))
 	if err != nil {
 		return fmt.Errorf("HTTP listener could not be opened")
 	}
 	logger.Info("server_started", "port", cfg.Port)
-	return server.Serve(ctx, listener)
+	err = server.Serve(ctx, listener)
+	select {
+	case grpcErr := <-grpcFailure:
+		return grpcErr
+	default:
+		return err
+	}
 }

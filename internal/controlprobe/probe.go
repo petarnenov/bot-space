@@ -17,6 +17,7 @@ import (
 	"github.com/petarnenov/bot-space/internal/control"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -51,11 +52,10 @@ func (b *backend) Pull(ctx context.Context, _ control.Principal, cursor uint64) 
 	return &pb.ServerFrame{EventId: fmt.Sprintf("transport-probe-%d", cursor+1), Cursor: cursor + 1, Body: &pb.ServerFrame_Receipt{Receipt: &pb.Receipt{RequestId: "transport-probe"}}}, nil
 }
 
-// Wrap serves native HTTP/2 gRPC separately from legacy buffered HTTP routes.
-// The caller must invoke Stop during shutdown. Empty token leaves routes closed.
-func Wrap(legacy http.Handler, token string) (http.Handler, func(), error) {
+// New constructs the isolated synthetic probe; it never accesses project data.
+func New(token string, options ...grpc.ServerOption) (*grpc.Server, error) {
 	if len(token) < 32 || len(token) > 128 || strings.ContainsAny(token, " \t\r\n") {
-		return nil, nil, errors.New("invalid control probe configuration")
+		return nil, errors.New("invalid control probe configuration")
 	}
 	auth := func(_ context.Context, presented string) (control.Principal, error) {
 		if subtle.ConstantTimeCompare([]byte(token), []byte(presented)) != 1 {
@@ -63,7 +63,13 @@ func Wrap(legacy http.Handler, token string) (http.Handler, func(), error) {
 		}
 		return control.Principal{RunnerID: "transport-probe", ProjectID: "transport-probe", Role: pb.Role_ROLE_EXECUTOR, CredentialEpoch: 1}, nil
 	}
-	server, err := control.New(auth, &backend{})
+	return control.New(auth, &backend{}, options...)
+}
+
+// Wrap serves native HTTP/2 gRPC separately from legacy buffered HTTP routes.
+// The caller must invoke Stop during shutdown.
+func Wrap(legacy http.Handler, token string) (http.Handler, func(), error) {
+	server, err := New(token)
 	if err != nil {
 		return nil, nil, err
 	}
