@@ -8,7 +8,14 @@ context: |
   Enforce workspace isolation and own-inbox access. Never log secrets or bodies.
   Work in five sequential changes: foundation; identity/workspaces/invitations;
   agent registration/credentials; MCP mailbox; web management/integration/readiness.
-  First specification and architecture require user approval before implementation.
+  The original five changes are implemented and archived. Current authorized work
+  is architect-led-orchestration: HUMAN root intake, autonomous strict-majority
+  architect decisions, three rounds without time limits, native gRPC and
+  collaborator-only automatic runner enrollment without invitations. Legacy
+  mailbox invitations and private inbox isolation remain compatible. Execution
+  has no duration cap; each executor handles one active task. Architect and
+  executor runners may share a host with separate identities/state. Startup
+  selects provider, model and effort. Keep AGENTS.md unchanged.
   No paid resources or public deployment without explicit permission.
   Public GitHub owner/repository must be confirmed before the Go module path.
 rules:
