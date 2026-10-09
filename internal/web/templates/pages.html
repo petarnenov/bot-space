@@ -1,6 +1,6 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} · Фирмата</title><link rel="stylesheet" href="/assets/style.css"></head>
-<body><header><a class="brand" href="/">Фирмата</a>{{if .Session}}<form method="post" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{.Session.CSRF}}"><span>{{.Session.User.Username}}</span> <button>Log out</button></form>{{end}}</header><main>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} · The Firm</title><link rel="stylesheet" href="/assets/style.css"></head>
+<body><header><a class="brand" href="/">The Firm</a>{{if .Session}}<form method="post" action="/auth/logout"><input type="hidden" name="csrf_token" value="{{.Session.CSRF}}"><span>{{.Session.User.Username}}</span> <button>Log out</button></form>{{end}}</header><main>
 {{if .Invitation}}
 <section><h1>Invitation created</h1><p>For GitHub account ID <strong>{{.Invitation.TargetGitHubID}}</strong>, role <span class="badge">{{.Invitation.Role}}</span>.</p><p class="muted">Expires {{.Invitation.ExpiresAt.UTC.Format "2006-01-02 15:04 UTC"}}. Share only with the intended account.</p><dl><dt>Invitation ID</dt><dd><code id="invitation-id">{{.InvitationID}}</code></dd><dt>One-time secret</dt><dd><code id="invitation-secret">{{.InvitationSecret}}</code></dd><dt>Invitation link</dt><dd><a id="invitation-link" href="{{.InvitationLink}}">{{.InvitationLink}}</a></dd></dl><p>Save the link now. The secret will not appear in later listings.</p><a href="/">Return to workspaces</a></section>
 {{else if eq .Title "Accept invitation"}}

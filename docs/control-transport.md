@@ -105,7 +105,7 @@ verification and exited 0. Its result confirmed `tls`, `unary`,
 `status_trailers`, `bidirectional` and `reconnect_cursor` were all true.
 The proof used synthetic events and confirms transport, not durable storage or
 GitHub collaborator enrollment. HTTPS root, health and readiness returned 200;
-the public root displayed “Фирмата”.
+the public root displayed the configured product brand.
 
 Selected production topology: browser/MCP HTTPS on application port 8080,
 native TLS gRPC through the TCP proxy to application port 9090. Bind this

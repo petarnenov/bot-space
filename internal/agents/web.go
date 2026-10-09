@@ -11,7 +11,7 @@ import (
 type Web struct{ Store *Store }
 type resultPage struct{ Title, WorkspaceID, AgentID, CredentialID, Token string }
 
-var resultTemplate = template.Must(template.New("agent-result").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}}</title><link rel="stylesheet" href="/assets/style.css"></head><body><header><a class="brand" href="/">Фирмата</a></header><main><section><h1>{{.Title}}</h1><dl><dt>Agent ID</dt><dd><code>{{.AgentID}}</code></dd>{{if .CredentialID}}<dt>Credential ID</dt><dd><code>{{.CredentialID}}</code></dd>{{end}}</dl>{{if .Token}}<p>Save this token now. It will not be shown again.</p><code id="issued-token">{{.Token}}</code>{{end}}<p><a href="/workspaces/{{.WorkspaceID}}">Return to workspace</a></p></section></main></body></html>`))
+var resultTemplate = template.Must(template.New("agent-result").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}}</title><link rel="stylesheet" href="/assets/style.css"></head><body><header><a class="brand" href="/">The Firm</a></header><main><section><h1>{{.Title}}</h1><dl><dt>Agent ID</dt><dd><code>{{.AgentID}}</code></dd>{{if .CredentialID}}<dt>Credential ID</dt><dd><code>{{.CredentialID}}</code></dd>{{end}}</dl>{{if .Token}}<p>Save this token now. It will not be shown again.</p><code id="issued-token">{{.Token}}</code>{{end}}<p><a href="/workspaces/{{.WorkspaceID}}">Return to workspace</a></p></section></main></body></html>`))
 
 func (w *Web) Register(routes identity.Routes, browser *identity.Web) {
 	routes.Handle("POST /workspaces/{workspaceID}/agents", browser.Protect(true, w.register))

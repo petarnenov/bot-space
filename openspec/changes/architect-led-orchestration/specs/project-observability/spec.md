@@ -31,9 +31,9 @@ Identity, intake, votes, assignments and authoritative transitions SHALL have sa
 - **THEN** text is escaped or mutation denied without exposing secrets in logs.
 
 ### Requirement: Product name
-The human interface SHALL display the product name “Фирмата” in its shared header and page-title branding. Repository/module identifiers and existing workspace slugs SHALL retain compatibility.
+The human interface SHALL display the product name “The Firm” in its shared header and page-title branding. Repository/module identifiers and existing workspace slugs SHALL retain compatibility.
 
 #### Scenario: Branded pages
 - **GIVEN** a human opening the application
 - **WHEN** shared pages or agent credential results render
-- **THEN** the displayed application brand is “Фирмата”.
+- **THEN** the displayed application brand is “The Firm”.
