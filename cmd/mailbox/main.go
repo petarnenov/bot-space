@@ -14,6 +14,7 @@ import (
 
 	"github.com/petarnenov/bot-space/internal/agents"
 	"github.com/petarnenov/bot-space/internal/config"
+	"github.com/petarnenov/bot-space/internal/controlprobe"
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
 	"github.com/petarnenov/bot-space/internal/identity"
@@ -101,6 +102,14 @@ func run(logger *slog.Logger) error {
 			return fmt.Errorf("mailbox configuration is invalid")
 		}
 		server.Handle("/mcp", mcpserver.New(store, mailboxConfig.AllowedOrigins))
+	}
+	if token := os.Getenv("CONTROL_PROBE_TOKEN"); token != "" {
+		handler, shutdown, err := controlprobe.Wrap(server.HTTP.Handler, token)
+		if err != nil {
+			return err
+		}
+		defer shutdown()
+		server.HTTP.Handler = handler
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.Port))
 	if err != nil {
