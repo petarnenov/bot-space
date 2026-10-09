@@ -1,10 +1,9 @@
 # Runner enrollment foundations
 
 The startup flow binds a machine Ed25519 key, project and role to a verified
-GitHub identity. This implementation is in progress: signing primitives and
-durable enrollment are implemented; browser callback wiring, one-use challenge
-consumption, credential issuance/refresh and startup CLI integration remain
-pending under OpenSpec task 3.2. No production enrollment endpoint is claimed.
+GitHub identity. This implementation is in progress: signing primitives, durable enrollment, one-use challenge consumption and
+credential issuance/refresh are implemented; browser callback wiring and startup
+CLI integration remain pending under OpenSpec task 3.2. No production enrollment endpoint is claimed.
 
 ## Implemented boundaries
 
@@ -38,6 +37,19 @@ Run `go test -race ./internal/runneridentity` for cryptographic boundaries.
 With a configured TEST_DATABASE_URL, run
 `go test -race ./tests/integration -run TestRunnerEnrollment` for real PostgreSQL
 restart/idempotency, wrong-role signatures, unauthorized identity, expired
-attempts and repository changes during admission. SQL challenge storage alone
-does not prove replay protection; claim/refresh tests must pass before task 3.2
+attempts and repository changes during admission. Claim/refresh tests additionally cover single-use and concurrent replay, wrong
+key proof, expired challenges, hashed token storage, epoch rotation, collaborator
+removal, runner deactivation and safe transactional credential audit. The full
+startup OAuth/HTTP/native stream integration still must pass before task 3.2
 can be completed.
+
+## Credential lifecycle
+
+Store.Issue requires a valid key proof and current forced GitHub verification.
+It atomically consumes the challenge, rotates the hashed credential and writes
+safe audit metadata. Challenges expire after one minute; credential lifetime is
+15 minutes. These are authentication bounds, not task execution deadlines;
+the runtime must refresh while arbitrarily long work continues. Authentication
+checks active project/runner, current epoch, role, owner and GitHub authority
+before accepting each operation. A lost issuance response requires a new
+challenge; reusing the old signature cannot deliver another credential.
