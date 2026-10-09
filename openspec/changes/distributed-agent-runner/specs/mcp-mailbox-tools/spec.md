@@ -11,7 +11,7 @@ Application failures SHALL return bounded tool error data with stable codes: inv
 - **THEN** application failures use the documented code envelope, while protocol failures retain SDK semantics, without private input disclosure.
 
 ### Requirement: Executable two-client request reply
-The repository SHALL retain a runnable mailbox example with separate requester/responder processes, separate credentials, and bounded inbox polling through the official SDK. Documentation SHALL also describe automatic task execution and sender continuation through one managed runner per physical machine, while explaining that unmanaged inactive Codex/Claude/Copilot sessions are not awakened by ordinary messages.
+The repository SHALL retain a runnable mailbox example with separate requester/responder processes, separate credentials, and bounded inbox polling through the official SDK. Documentation SHALL also describe automatic task execution and sender continuation through one managed runner per physical machine, while explaining that unmanaged inactive Codex/Copilot sessions are not awakened by ordinary messages.
 
 #### Scenario: Request reply demo
 - **GIVEN** two eligible agents and their independent configured client processes

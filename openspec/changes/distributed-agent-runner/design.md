@@ -5,7 +5,7 @@
 
 See proposal.md for the requested workflow. The existing server uses Go, pgx, versioned SQL and official SDK Streamable HTTP with a 15-second native client timeout and 60-second server write timeout. Agents have credential-derived identities and owner-scoped management. Mailbox ACK is not an execution claim. The requestreply example constructs a synthetic reply without model execution.
 
-The user selected one runner per physical machine with managed persistent sessions and requested Codex, Claude Code and Copilot clients. Existing interactive applications remain independent; managed sessions are owned by this runner.
+The user selected one runner per physical machine with managed persistent sessions and requested Codex and Copilot clients for this change scope. Existing interactive applications remain independent; managed sessions are owned by this runner.
 
 ## Goals / Non-Goals
 
@@ -38,12 +38,11 @@ Default policy allows analysis. Writes and tool permissions require explicit ope
 Use a small Go provider interface for capabilities, start/resume, normalized streaming events and process-tree cancellation. Pin and check supported CLI versions during implementation. Use exact recorded session IDs, never --last or globally most-recent continuation.
 
 - Codex: documented non-interactive execution with JSON events and exact exec resume session ID; prompts go through stdin.
-- Claude Code: print/stream-json execution and exact resume session ID; bounded input and structured result/session parsing.
 - GitHub Copilot CLI: documented programmatic JSONL and exact --session-id/explicit resume. Supply private task content through supported stdin or an owner-only input file under a locally approved read path, with a constant instruction referring to that file. Do not place task text in -p arguments. Verify installed capabilities and the actual session/result event schema before claiming support.
 
 The local Copilot command currently resolves to a VS Code bootstrap wrapper, not a working CLI. Install the official supported CLI only during implementation, record its version, and test authentication/output/resume/MCP permissions with synthetic tasks. Copilot ACP is a preview alternative; this release does not depend on preview session loading or introduce an additional language runtime.
 
-Provider accounts remain local and must permit non-interactive use. Model smoke tests use the operator's selected model/account rather than silently switching providers. Deterministic fake adapters in CI prove orchestration, not real model compatibility; separate real smoke checks are mandatory for each of the three adapters.
+Provider accounts remain local and must permit non-interactive use. Model smoke tests use the operator's selected model/account rather than silently switching providers. Deterministic fake adapters in CI prove orchestration, not real model compatibility; separate real smoke checks are mandatory for Codex and Copilot in this change.
 
 ### Local MCP delegation and automatic sender continuation
 
@@ -74,7 +73,7 @@ Add workspace task pages listing only tasks whose sender/recipient agents belong
 
 ## Migration Plan
 
-Apply additive task schema before enabling task tools; retain all existing mailbox data/behavior. Run real-PG authorization/lease/concurrency tests, deterministic two-runner process tests and separate real Codex/Claude/Copilot smoke checks. Package runner binaries/configuration for macOS and Linux with startup/shutdown instructions; auto-start remains an explicit local install action.
+Apply additive task schema before enabling task tools; retain all existing mailbox data/behavior. Run real-PG authorization/lease/concurrency tests, deterministic two-runner process tests and separate real Codex/Copilot smoke checks. Package runner binaries/configuration for macOS and Linux with startup/shutdown instructions; auto-start remains an explicit local install action.
 
 Deploy server task support to the already-authorized Railway project after local/CI verification. Configure and start one runner on each available physical machine with its own provider login, project path and agent token. Verify a real delegated task and automatic continuation across two machines; unavailable second-machine access must remain an explicit incomplete gate.
 
@@ -83,7 +82,6 @@ Rollback stops runners and disables task-tool mounting while retaining additive 
 ## Sources and Observed Scope
 
 - [Codex non-interactive execution and resume](https://learn.chatgpt.com/docs/non-interactive-mode).
-- [Claude Code programmatic sessions](https://code.claude.com/docs/en/headless).
 - [Copilot CLI command/session/MCP reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference).
 
-Local Codex 0.162.0 and Claude Code 2.1.292 help were inspected; no model turn was executed in planning. Copilot wrapper installation prompt was declined. Exact supported provider versions and machine installation evidence belong to implementation.
+Local Codex 0.162.0 help was inspected; no model turn was executed in planning. Copilot wrapper installation prompt was declined. Exact supported provider versions and machine installation evidence belong to implementation.

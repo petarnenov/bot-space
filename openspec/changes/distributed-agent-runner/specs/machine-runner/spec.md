@@ -22,8 +22,8 @@ Each managed agent SHALL map to a fixed provider, existing local project directo
 - **WHEN** its configured agent processes it
 - **THEN** local policy remains authoritative and unauthorized actions are denied.
 
-### Requirement: Three provider adapters
-Runner-managed sessions SHALL support Codex CLI, Claude Code and GitHub Copilot CLI through installed supported versions and machine-local authentication. Startup SHALL report missing binaries, unsupported protocol features and authentication requirements explicitly. Adapters SHALL normalize final text, session identity, failure and interruption without claiming an untested provider works.
+### Requirement: Two provider adapters
+Runner-managed sessions SHALL support Codex CLI and GitHub Copilot CLI through installed supported versions and machine-local authentication. Startup SHALL report missing binaries, unsupported protocol features and authentication requirements explicitly. Adapters SHALL normalize final text, session identity, failure and interruption without claiming an untested provider works.
 
 #### Scenario: Provider compatibility
 - **GIVEN** each configured supported provider

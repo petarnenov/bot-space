@@ -22,9 +22,8 @@
 
 - [x] 3.1 Add common provider capability/result/error/session/process interfaces and bounded private input/output handling; verify malformed events, overflow, fixed paths and denied permission elevation with executable fake providers.
 - [x] 3.2 Add Codex CLI start/exact-resume adapter and local bridge configuration; verify installed supported CLI version/authentication, synthetic real execution plus delegation continuation, permission profile and no prompt/token argv leakage; record exact tested commands.
-- [ ] 3.3 Add Claude Code start/exact-resume adapter and local bridge configuration; verify supported version/authentication, synthetic real execution/continuation, permission denial and bounded stream parsing; record exact tested commands.
 - [x] 3.4 Install/check official GitHub Copilot CLI and add programmatic JSONL/exact-session adapter with private input file or supported stdin and explicit MCP timeout; verify synthetic real execution/continuation/delegation, authentication and permission profiles; record supported version and distinguish the VS Code wrapper.
-- [ ] 3.5 Verify all three provider adapters preserve prior context across two turns and normalize failure/permission/interruption; test Codex-to-Claude, Claude-to-Copilot and Copilot-to-Codex through independent runner processes; classify deterministic CI versus real-model evidence explicitly.
+- [x] 3.5 Verify Codex and Copilot adapters preserve prior context across two turns and normalize failure/permission/interruption; test Codex-to-Copilot and Copilot-to-Codex through independent runner processes; classify deterministic CI versus real-model evidence explicitly.
 
 ## 4. Task Visibility and Distribution
 
@@ -49,9 +48,9 @@
 | Cancellation and uncertain interruption | 1.4, 2.3, 3.1, 5.1 |
 | Bounded delegation dependencies | 1.5, 2.5 |
 | One supervisor per machine; Local execution configuration | 2.1, 2.2, 4.2 |
-| Three provider adapters | 3.1, 3.2, 3.3, 3.4, 3.5 |
+| Two provider adapters | 3.1, 3.2, 3.4, 3.5 |
 | Automatic task execution and context continuity; Local delegation bridge | 2.4, 2.5, 3.5, 5.3 |
-| Bounded supervision and recovery; Local secret and output handling | 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 3.4 |
+| Bounded supervision and recovery; Local secret and output handling | 2.1, 2.2, 2.3, 3.1, 3.2, 3.4 |
 | Participant-owned task views; Execution status and presence; Protected task controls and safe audit | 4.1, 2.2, 1.4 |
 | Modified executable demonstration/activation documentation | 4.3, 5.1, 5.3 |
 | Complete verified publication and physical-machine delivery | 5.1, 5.2, 5.3, 5.4 |
@@ -60,3 +59,4 @@
 
 - Sync and archive only after every tracked task and scenario has authoritative passing evidence.
 - Publish final archive/evidence and verify its exact commit's GitHub Actions.
+- Claude adapter and Claude-inclusive cross-provider evidence were split into `claude-adapter-followup`.

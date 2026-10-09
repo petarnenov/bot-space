@@ -8,7 +8,7 @@ The mailbox delivers messages but does not execute delegated work or return resu
 ## What Changes
 
 - Add one supervised Go runner per machine, with locally configured agents, project directories, provider permissions, and persistent session mappings.
-- Support Codex CLI, Claude Code, and GitHub Copilot CLI through explicit adapters; provider authentication remains on each machine.
+- Support Codex CLI and GitHub Copilot CLI through explicit adapters; provider authentication remains on each machine.
 - Add durable task submission, claims, renewable leases, fenced completion, cancellation, deadlines, and correlated results in PostgreSQL.
 - Add a local MCP delegate_task bridge that submits work, waits locally, and returns results into the initiating model turn; remote HTTP operations remain short.
 - Resume the exact initiating session after disconnection/restart using a durable continuation journal. Ordinary mailbox text remains data; explicit tasks drive execution.

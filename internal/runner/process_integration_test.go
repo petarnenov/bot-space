@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/petarnenov/bot-space/migrations"
 )
 
+var runnerTestDBSeq uint64
+
 func isolatedDB(t *testing.T) (context.Context, *pgxpool.Pool) {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -33,7 +36,8 @@ func isolatedDB(t *testing.T) (context.Context, *pgxpool.Pool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := fmt.Sprintf("bot_space_runner_test_%d", time.Now().UnixNano())
+	seq := atomic.AddUint64(&runnerTestDBSeq, 1)
+	name := fmt.Sprintf("bot_space_runner_test_%d_%d", time.Now().UnixNano(), seq)
 	if _, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
@@ -66,18 +70,35 @@ func replaceDB(dsn, name string) string {
 }
 
 func TestTwoIndependentSupervisorsDelegateAndContinue(t *testing.T) {
+	t.Run("copilot_to_copilot", func(t *testing.T) {
+		testTwoIndependentSupervisorsDelegateAndContinue(t, "copilot", "copilot")
+	})
+	t.Run("codex_to_copilot", func(t *testing.T) {
+		testTwoIndependentSupervisorsDelegateAndContinue(t, "codex", "copilot")
+	})
+	t.Run("copilot_to_codex", func(t *testing.T) {
+		testTwoIndependentSupervisorsDelegateAndContinue(t, "copilot", "codex")
+	})
+}
+
+func testTwoIndependentSupervisorsDelegateAndContinue(t *testing.T, providerA, providerB string) {
+	t.Helper()
 	ctx, pool := isolatedDB(t)
 	teams := &workspaces.Store{Pool: pool}
-	ownerWorkspace, err := teams.Bootstrap(ctx, 101, "runner-processes")
+	seq := atomic.AddUint64(&runnerTestDBSeq, 1)
+	ownerGitHubID := int64(1000000 + seq*10)
+	memberGitHubID := ownerGitHubID + 1
+	workspaceSlug := fmt.Sprintf("runner-processes-%d", seq)
+	ownerWorkspace, err := teams.Bootstrap(ctx, ownerGitHubID, workspaceSlug)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var ownerID string
-	if err = pool.QueryRow(ctx, "SELECT id::text FROM mailbox.users WHERE github_id=101").Scan(&ownerID); err != nil {
+	if err = pool.QueryRow(ctx, "SELECT id::text FROM mailbox.users WHERE github_id=$1", ownerGitHubID).Scan(&ownerID); err != nil {
 		t.Fatal(err)
 	}
 	var memberID string
-	if err = pool.QueryRow(ctx, "INSERT INTO mailbox.users (github_id,username) VALUES (102,'member') RETURNING id::text").Scan(&memberID); err != nil {
+	if err = pool.QueryRow(ctx, "INSERT INTO mailbox.users (github_id,username) VALUES ($1,'member') RETURNING id::text", memberGitHubID).Scan(&memberID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = pool.Exec(ctx, "INSERT INTO mailbox.memberships (workspace_id,user_id,role) VALUES ($1,$2,'member')", ownerWorkspace.ID, memberID); err != nil {
@@ -125,7 +146,7 @@ func TestTwoIndependentSupervisorsDelegateAndContinue(t *testing.T) {
 		Agents: []AgentConfig{{
 			ID:             ownerAgent.ID,
 			TokenEnv:       "RUNNER_OWNER_TOKEN",
-			Provider:       "copilot",
+			Provider:       providerA,
 			Project:        projectA,
 			AllowedSenders: []string{memberAgent.ID},
 		}},
@@ -136,7 +157,7 @@ func TestTwoIndependentSupervisorsDelegateAndContinue(t *testing.T) {
 		Agents: []AgentConfig{{
 			ID:             memberAgent.ID,
 			TokenEnv:       "RUNNER_MEMBER_TOKEN",
-			Provider:       "copilot",
+			Provider:       providerB,
 			Project:        projectB,
 			AllowedSenders: []string{ownerAgent.ID},
 		}},
