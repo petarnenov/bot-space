@@ -7,11 +7,22 @@ import (
 	"github.com/petarnenov/bot-space/internal/identity"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
 	"github.com/petarnenov/bot-space/internal/security"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestContractPublicationAuthorityRevisionAndRestart(t *testing.T) {
+	cli, err := exec.LookPath("openspec")
+	if err != nil {
+		t.Skip("OpenSpec CLI required for integrated verification")
+	}
+	cli, err = filepath.Abs(cli)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, pool, _, w, owner := teams(t)
 	var project string
 	if err := pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,42,101,'owner','project') RETURNING id::text`, w.ID).Scan(&project); err != nil {
@@ -39,12 +50,39 @@ func TestContractPublicationAuthorityRevisionAndRestart(t *testing.T) {
 	}
 	identities := &runneridentity.Store{Pool: pool, Authority: &runnerAuthority{allowed: map[int64]bool{101: true}}}
 	store := &contracts.Store{Pool: pool, Identities: identities}
-	prefix := "openspec/changes/feature/"
-	artifacts := map[string]string{}
-	for _, name := range []string{"proposal.md", "design.md", "tasks.md", "specs/work/spec.md"} {
-		artifacts[prefix+name] = strings.Repeat("a", 64)
+	checkout := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		out, e := exec.Command("git", append([]string{"-C", checkout}, args...)...).CombinedOutput()
+		if e != nil {
+			t.Fatal("Git fixture failed")
+		}
+		return strings.TrimSpace(string(out))
 	}
-	content := contracts.Content{ProjectID: project, RootID: root.ID, RootRevision: 1, RepositoryID: 42, BaseCommit: strings.Repeat("b", 40), Change: "feature", Tasks: []string{"1.1"}, Scenarios: []string{"verified feature"}, Artifacts: artifacts}
+	git("init", "-q")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.invalid")
+	files := map[string]string{
+		"proposal.md":        "# Feature\n\n## Why\nProvide feature.\n\n## What Changes\n- Add feature.\n\n## Capabilities\n\n### New Capabilities\n- work: Verified behavior.\n\n### Modified Capabilities\n- None.\n\n## Impact\nImplementation.\n",
+		"design.md":          "# Design\n\nImplement feature.\n",
+		"tasks.md":           "# Tasks\n\n## 1. Implementation\n\n- [ ] 1.1 Implement feature and verify output.\n",
+		"specs/work/spec.md": "# Work\n\n## ADDED Requirements\n\n### Requirement: Verified output\nThe feature SHALL return verified output.\n\n#### Scenario: Success\n- **GIVEN** valid input\n- **WHEN** feature runs\n- **THEN** output is verified.\n",
+	}
+	artifacts := map[string]string{}
+	for name, body := range files {
+		relative := "openspec/changes/feature/" + name
+		p := filepath.Join(checkout, filepath.FromSlash(relative))
+		if err = os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(p, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		artifacts[relative] = security.Hash(body)
+	}
+	git("add", ".")
+	git("commit", "-qm", "Create specification")
+	content := contracts.Content{ProjectID: project, RootID: root.ID, RootRevision: 1, RepositoryID: 42, BaseCommit: git("rev-parse", "HEAD"), Change: "feature", Tasks: []string{"1.1"}, Scenarios: []string{"work::Verified output::Success"}, Artifacts: artifacts}
 	if _, err = store.Publish(ctx, tokens["executor"], content); !errors.Is(err, contracts.ErrForbidden) {
 		t.Fatal("executor published contract", err)
 	}
@@ -64,10 +102,19 @@ func TestContractPublicationAuthorityRevisionAndRestart(t *testing.T) {
 	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); !errors.Is(err, contracts.ErrStale) {
 		t.Fatal("unverified contract passed allocator gate", err)
 	}
-	// Explicit trusted validation-record fixture isolates the SQL gate; actual
-	// Git/OpenSpec verification is covered by real-CLI tests in contracts.
-	if _, err = pool.Exec(ctx, `INSERT INTO mailbox.contract_validations(project_id,contract_id,contract_hash,validator_runner_id) VALUES($1,$2,$3,$4)`, project, first.ID, first.Hash, first.Publisher); err != nil {
-		t.Fatal(err)
+	validator := contracts.Validator{Store: store, OpenSpec: cli, Checkout: func(p string, repository int64) (string, error) {
+		if p != project || repository != 42 {
+			return "", contracts.ErrForbidden
+		}
+		return checkout, nil
+	}}
+	validation, err := validator.Validate(ctx, tokens["architect"], project, first.ID)
+	if err != nil || validation == "" {
+		t.Fatal("real verification-to-storage pipeline failed", err)
+	}
+	repeated, err := validator.Validate(ctx, tokens["architect"], project, first.ID)
+	if err != nil || repeated != validation {
+		t.Fatal("validation retry duplicated evidence", err)
 	}
 	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); err != nil {
 		t.Fatal("verified bound record rejected", err)

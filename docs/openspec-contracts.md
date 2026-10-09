@@ -86,6 +86,15 @@ RequireValidated rejects missing records, different hashes, inactive projects,
 terminal roots and changed human revisions. It does not replace council approval;
 the allocator must enforce both inside its authoritative assignment transaction.
 Real-PG SQL-gate tests use an explicitly inserted trusted validation fixture,
-while real-Git/CLI tests verify the producer's artifact checks. Full producer/
-storage integration and allocation wiring remain pending; neither migration
+while real-Git/CLI tests verify the producer's artifact checks. Full producer/storage integration is verified with real Git, CLI and PostgreSQL;
+allocation/council wiring remains a subsequent task; neither migration
 0008 nor 0009 has been deployed to production yet.
+
+The integrated real-PG test now creates a committed valid OpenSpec repository,
+publishes an authenticated architect contract, invokes Validator using the
+configured checkout/tool, persists evidence and verifies idempotent retries.
+The gate rejects old evidence after human input changes. CI installs the pinned
+OpenSpec CLI before tests/race checks so semantic integration is not silently
+skipped. Validation audit references exclude content and credentials. Execution
+still requires a separately accepted matching council decision and allocator
+fencing; publication/validation alone grants no work authority.

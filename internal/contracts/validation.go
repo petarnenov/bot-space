@@ -63,6 +63,12 @@ func (v *Validator) Validate(ctx context.Context, token, project, id string) (st
 	if err != nil {
 		return "", ErrUnavailable
 	}
+	_, err = tx.Exec(ctx, `INSERT INTO mailbox.audit_events(workspace_id,actor_kind,action,target_id,metadata)
+ SELECT p.workspace_id,'agent','contract.validated',$1,jsonb_build_object('project_id',$2::text,'contract_id',$3::text,'contract_hash',$4::text)
+ FROM mailbox.orchestration_projects p WHERE p.id=$2 AND NOT EXISTS(SELECT 1 FROM mailbox.audit_events WHERE action='contract.validated' AND target_id=$1)`, validation, project, id, digest)
+	if err != nil {
+		return "", ErrUnavailable
+	}
 	if tx.Commit(ctx) != nil {
 		return "", ErrUnavailable
 	}
