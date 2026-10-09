@@ -54,3 +54,21 @@ Tests use an isolated real Git repository to prove dirty files do not replace
 committed evidence and false commit/digest claims fail. OpenSpec CLI semantic
 validation and scenario/task-reference extraction remain pending; these Git
 checks alone do not prove a complete valid specification or council acceptance.
+
+## Standard OpenSpec semantic validation
+
+VerifySpecification first checks exact Git blobs, then reconstructs only the
+bound standard spec-driven artifacts in a private temporary OpenSpec project.
+The checkout's dirty files, global store configuration, repository hooks and
+other executable files are excluded. A trusted absolute OpenSpec executable
+runs strict validation and produces the task registry/delta scenario inventory.
+Every referenced task must exist. Scenarios may use an unambiguous name or
+`capability::requirement::scenario`; ambiguous/nonexistent references fail.
+
+A real-CLI test validates an isolated committed change, rejects missing task/
+scenario references and rejects a non-normative invalid requirement even when
+its supplied digest matches Git. The temporary snapshot is removed afterwards.
+These checks target the current standard spec-driven contract format; custom
+schemas with different artifact layouts require an explicit extension rather
+than silent reinterpretation. Durable validation evidence/approval wiring still
+must prevent unverified publication from being assigned for execution.
