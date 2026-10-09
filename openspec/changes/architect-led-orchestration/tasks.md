@@ -20,6 +20,8 @@
 - [ ] 4.1 Add project/backlog migrations and authenticated human intake with immutable provenance, idempotency and revisions; verify real-PG restart, cross-project and runner-impersonation tests and document intake.
 - [ ] 4.2 Add versioned OpenSpec contracts, artifact hashes, task/scenario references and Git base revisions; verify stale/missing-contract rejection and scope-provenance tests and document the contract format.
 
+- [ ] 4.3 Implement human-creator pause/resume/cancel/archive with immutable lifecycle history and root execution fencing; verify authorization/CSRF, concurrent actions, cancelled-root revival denial, preserved archived evidence and architect reconciliation before resume, and document controls.
+
 ## 5. Durable council and control events
 
 - [ ] 5.1 Persist council snapshots, rounds, votes and accepted commits transactionally with authorization; verify concurrent coordinator/vote races and material reconsideration in real PG and document state transitions.

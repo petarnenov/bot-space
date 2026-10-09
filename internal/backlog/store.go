@@ -233,3 +233,36 @@ func (s *Store) Get(ctx context.Context, secret, project, id string, revision in
 	}
 	return read(ctx, s.Pool, project, id, revision)
 }
+
+// List returns bounded pages in stable creation order. Cursor UUIDs are scoped
+// by the query's project; a foreign cursor cannot disclose another backlog.
+func (s *Store) List(ctx context.Context, secret, project, after string) ([]Intention, error) {
+	if !security.ValidUUID(project) || (after != "" && !security.ValidUUID(after)) {
+		return nil, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, _, _, err := s.authorize(ctx, secret, project); err != nil {
+		return nil, err
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT i.id::text,i.project_id::text,i.creator_user_id::text,r.revision,i.state,r.title,r.description,r.ticket_reference,r.priority,i.created_at
+ FROM mailbox.human_intentions i JOIN mailbox.human_intention_revisions r ON r.project_id=i.project_id AND r.intention_id=i.id AND r.revision=i.current_revision
+ WHERE i.project_id=$1 AND ($2='' OR (i.created_at,i.id)>(SELECT created_at,id FROM mailbox.human_intentions WHERE project_id=$1 AND id=NULLIF($2,'')::uuid))
+ ORDER BY i.created_at,i.id LIMIT 50`, project, after)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	defer rows.Close()
+	out := []Intention{}
+	for rows.Next() {
+		var item Intention
+		if err = rows.Scan(&item.ID, &item.ProjectID, &item.Creator, &item.Revision, &item.State, &item.Title, &item.Description, &item.Ticket, &item.Priority, &item.CreatedAt); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, item)
+	}
+	if rows.Err() != nil {
+		return nil, ErrUnavailable
+	}
+	return out, nil
+}

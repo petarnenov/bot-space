@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/petarnenov/bot-space/internal/agents"
+	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/config"
 	"github.com/petarnenov/bot-space/internal/control"
 	"github.com/petarnenov/bot-space/internal/controlprobe"
@@ -153,6 +154,7 @@ func run(logger *slog.Logger) error {
 			}
 			runnerIdentities = &runneridentity.Store{Pool: pool, Authority: authority}
 			(&runneridentity.Web{Store: runnerIdentities, Browser: web, ControlEndpoint: runnerIdentityConfig.ControlEndpoint, ControlCA: runnerIdentityConfig.ControlCA}).Register(server)
+			(&backlog.Web{Store: &backlog.Store{Pool: pool, Sessions: web.Sessions, Authority: authority}, Browser: web}).Register(server)
 		}
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
 		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, MailboxEnabled: mailboxConfig.Enabled}).Register(server)

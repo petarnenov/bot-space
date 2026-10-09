@@ -37,3 +37,16 @@ Planning, scope interpretation, assignments, clarifications, retries, review, ac
 - **GIVEN** a human-created root and configured project authority
 - **WHEN** architects process it through planning and execution
 - **THEN** the workflow progresses without a human approval gate.
+
+### Requirement: Human goal lifecycle with preserved history
+The creator with current project access SHALL control pause/resume/cancel/archive of their root with immutable actor/history records. Pause/cancel SHALL fence derived execution and preserve uncertainty for architect reconciliation. Resume SHALL not blindly restart work. Archive SHALL hide the goal without deleting revisions, commits, decisions or audit. Controls SHALL not provide operational approval or council override.
+
+#### Scenario: Human pauses ongoing work
+- **GIVEN** a human-owned goal with derived work
+- **WHEN** its creator pauses it
+- **THEN** new execution is prevented, ongoing work stops safely under fencing and architects retain checkpoint/uncertainty evidence without claiming prior effects were undone.
+
+#### Scenario: Resume, cancel and archive
+- **GIVEN** a paused or cancelled human-owned goal
+- **WHEN** its creator resumes eligible paused work or archives it
+- **THEN** architects reconcile before execution resumes, and archival preserves the full durable history rather than performing destructive deletion.
