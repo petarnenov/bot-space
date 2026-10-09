@@ -80,7 +80,7 @@ revoked access, pause fences, retained history and forged snapshot rejection.
 Storage tests seed trusted contract-validation fixtures; actual committed Git and
 OpenSpec verification is covered separately by the contract integration test.
 
-Task 5.1 remains open: allocation/answer/review/retry/integration decisions still
+Task 5.1 remains open: answer/review/retry/integration decisions still
 need authoritative work/question/evidence subject bindings, and native control
 handlers/runtime are not yet wired. The storage foundation does not assign work,
 resume a coding session or merge a branch. Outbox replay and autonomous model
@@ -91,3 +91,43 @@ transaction and bind that mapping again under row locks. A repository mapping
 change between verification and the write fails closed; a regression test races
 that change. Contract consumption additionally requires the contract repository
 ID to match the current project mapping.
+
+
+## Task-scoped allocation decisions
+
+Migration 0012 extends durable heads with a server-derived subject. Existing
+plans retain subject `root`; an allocation uses `task:OPEN_SPEC_TASK_ID` from
+its verified contract. Previous-decision links and heads have composite foreign
+keys tying project, root, kind and subject together. Migration 0012 is currently
+verified only in isolated test databases.
+
+`OpenAllocation` and `ReconsiderAllocation` accept one `assign` action whose
+`Target` is an active executor registered for the project and whose `Value` is
+the exact task ID. The server rechecks GitHub project access for the executor.
+Contract content must match its canonical hash and stored provenance, and the
+task must exist in its verified task list. Independent tasks have independent
+heads; a missing task, mismatched action or foreign-project executor fails.
+Approvals recheck executor eligibility. Objections remain recordable if an
+executor loses access so the council can complete its round and revise.
+
+`LockAccepted` is the transaction gate for trusted control-service consumers.
+It verifies exact decision kind, subject and contract hash, normalized majority
+evidence, the current head, and current root/spec/lifecycle fences. Allocation
+consumption additionally requires the current plan to have a proven majority
+for that same contract and lifecycle. A decision
+for task 1.1 cannot authorize task 1.2 or a review action. Reading old decisions
+preserves history. Superseded heads reject votes, coordinator acquisition,
+proposal revisions and operational consumption even if their old contracts
+still match the human input revision.
+
+The upcoming assignment transaction must also authenticate its actor, validate
+current executor capability/online authority and reserve its global machine slot.
+An accepted allocation proposal currently reserves no capacity and starts no
+provider. Attempt/question/evidence bindings, retries and integration decisions
+remain pending in tasks 5–6 and 8; task 5.1 remains unchecked.
+
+Real-PG race tests verify independent task heads, exact task/action matching,
+missing-task and foreign-executor rejection, withdrawn-executor objections versus
+approvals, majority persistence, wrong-subject/kind/hash denial, unaccepted
+consumption denial, pause fences and old-head rejection after a new verified
+commit with the same human revision.

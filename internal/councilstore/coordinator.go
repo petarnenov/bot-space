@@ -33,6 +33,9 @@ func (s *Store) Coordinate(ctx context.Context, token, id string) (Lease, error)
 	if err != nil {
 		return Lease{}, err
 	}
+	if err = current(ctx, tx, r); err != nil {
+		return Lease{}, err
+	}
 	if !slices.Contains(r.Snapshot.Members, p.RunnerID) {
 		return Lease{}, council.ErrMember
 	}
@@ -80,8 +83,11 @@ func (s *Store) Revise(ctx context.Context, token, id string, epoch int64, round
 	if err != nil {
 		return Record{}, err
 	}
-	if r.Snapshot.Kind == "plan" && !planProposal(proposal, r.Contract) {
-		return Record{}, council.ErrInvalid
+	if err = current(ctx, tx, r); err != nil {
+		return Record{}, err
+	}
+	if err = s.proposal(ctx, tx, p, r.Contract, r.Snapshot.Kind, r.Subject, proposal); err != nil {
+		return Record{}, err
 	}
 	_, material, err := source(ctx, tx, p.ProjectID, r.Contract)
 	if err != nil || material.RootRevision != r.Material.RootRevision {

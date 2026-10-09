@@ -55,7 +55,7 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	if _, err = pool.Exec(ctx, `UPDATE mailbox.project_runners SET credential_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`, ids[3]); err != nil {
 		t.Fatal(err)
 	}
-	content := contracts.Content{ProjectID: project, RootID: root.ID, RootRevision: 1, RepositoryID: 42, BaseCommit: strings.Repeat("a", 40), Change: "feature", Tasks: []string{"1.1"}, Scenarios: []string{"work::Output::Success"}, Artifacts: map[string]string{}}
+	content := contracts.Content{ProjectID: project, RootID: root.ID, RootRevision: 1, RepositoryID: 42, BaseCommit: strings.Repeat("a", 40), Change: "feature", Tasks: []string{"1.1", "1.2"}, Scenarios: []string{"work::Output::Success"}, Artifacts: map[string]string{}}
 	for _, file := range []string{"proposal.md", "design.md", "tasks.md", "specs/work/spec.md"} {
 		content.Artifacts["openspec/changes/feature/"+file] = strings.Repeat("b", 64)
 	}
@@ -285,7 +285,120 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	identities.Authority = authority
-	forged, err := council.Restore(reconsidered.Snapshot, reconsidered.Material)
+	// A new verified commit with the same human revision replaces the plan
+	// without making the old contract itself stale. Current-head fencing must
+	// independently reject votes and coordination for that superseded plan.
+	oldPlanID, oldPlanHash := reconsidered.Snapshot.ID, reconsidered.Snapshot.Rounds[0].Hash
+	content.BaseCommit = strings.Repeat("d", 40)
+	newPlanContract, err := contractStore.Publish(ctx, tokens[0], content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `INSERT INTO mailbox.contract_validations(project_id,contract_id,contract_hash,validator_runner_id) VALUES($1,$2,$3,$4)`, project, newPlanContract.ID, newPlanContract.Hash, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	nextPlan := scopeProposal
+	nextPlan.Actions = append([]council.Action(nil), scopeProposal.Actions...)
+	nextPlan.Actions[0].Target = newPlanContract.ID
+	reconsidered, err = restarted.ReconsiderPlan(ctx, tokens[0], newPlanContract.ID, nextPlan)
+	if err != nil || reconsidered.Snapshot.PreviousID != oldPlanID {
+		t.Fatal("new commit lost replacement history", err)
+	}
+	if _, err = restarted.Vote(ctx, tokens[0], oldPlanID, 1, oldPlanHash, council.Approve); !errors.Is(err, councilstore.ErrStale) {
+		t.Fatal("superseded plan gained votes", err)
+	}
+	if _, err = restarted.Coordinate(ctx, tokens[0], oldPlanID); !errors.Is(err, councilstore.ErrStale) {
+		t.Fatal("superseded plan acquired a coordinator", err)
+	}
+	if _, err = restarted.Get(ctx, tokens[0], oldPlanID); err != nil {
+		t.Fatal("superseded history disappeared", err)
+	}
+	revisedContract = newPlanContract
+	var executor string
+	if err = pool.QueryRow(ctx, `INSERT INTO mailbox.project_runners(project_id,owner_github_id,public_key,role) VALUES($1,101,decode($2,'hex'),'executor') RETURNING id::text`, project, security.Hash("executor-machine")).Scan(&executor); err != nil {
+		t.Fatal(err)
+	}
+	allocationProposal := council.Proposal{Actions: []council.Action{{Kind: "assign", Target: executor, Value: "1.1"}}, Rationale: "Assign task 1.1"}
+	allocation, err := restarted.OpenAllocation(ctx, tokens[0], revisedContract.ID, "1.1", allocationProposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherProposal := council.Proposal{Actions: []council.Action{{Kind: "assign", Target: executor, Value: "1.2"}}, Rationale: "Assign task 1.2"}
+	otherAllocation, err := restarted.OpenAllocation(ctx, tokens[0], revisedContract.ID, "1.2", otherProposal)
+	if err != nil || otherAllocation.Snapshot.ID == allocation.Snapshot.ID || otherAllocation.Subject != "task:1.2" {
+		t.Fatal("independent tasks shared one decision", err)
+	}
+	if _, err = restarted.OpenAllocation(ctx, tokens[0], revisedContract.ID, "1.2", allocationProposal); !errors.Is(err, council.ErrInvalid) {
+		t.Fatal("proposal changed its bound task", err)
+	}
+	missingTask := council.Proposal{Actions: []council.Action{{Kind: "assign", Target: executor, Value: "99.1"}}}
+	if _, err = restarted.OpenAllocation(ctx, tokens[0], revisedContract.ID, "99.1", missingTask); !errors.Is(err, council.ErrInvalid) {
+		t.Fatal("missing OpenSpec task deliberated", err)
+	}
+	var foreignProject, foreignExecutor string
+	if err = pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,43,101,'owner','other') RETURNING id::text`, workspace.ID).Scan(&foreignProject); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, `INSERT INTO mailbox.project_runners(project_id,owner_github_id,public_key,role) VALUES($1,101,decode($2,'hex'),'executor') RETURNING id::text`, foreignProject, security.Hash("executor-machine")).Scan(&foreignExecutor); err != nil {
+		t.Fatal(err)
+	}
+	foreignProposal := council.Proposal{Actions: []council.Action{{Kind: "assign", Target: foreignExecutor, Value: "1.1"}}}
+	if _, err = restarted.OpenAllocation(ctx, tokens[0], revisedContract.ID, "1.1", foreignProposal); !errors.Is(err, councilstore.ErrForbidden) {
+		t.Fatal("foreign-project executor accepted", err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.project_runners SET active=false WHERE id=$1`, executor); err != nil {
+		t.Fatal(err)
+	}
+	otherHash := otherAllocation.Snapshot.Rounds[0].Hash
+	if _, err = restarted.Vote(ctx, tokens[0], otherAllocation.Snapshot.ID, 1, otherHash, council.Object); err != nil {
+		t.Fatal("withdrawn executor prevented an objection", err)
+	}
+	if _, err = restarted.Vote(ctx, tokens[1], otherAllocation.Snapshot.ID, 1, otherHash, council.Approve); !errors.Is(err, councilstore.ErrForbidden) {
+		t.Fatal("withdrawn executor gained approval", err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.project_runners SET active=true WHERE id=$1`, executor); err != nil {
+		t.Fatal(err)
+	}
+	allocationHash := allocation.Snapshot.Rounds[0].Hash
+	for i := 0; i < 3; i++ {
+		allocation, err = restarted.Vote(ctx, tokens[i], allocation.Snapshot.ID, 1, allocationHash, council.Approve)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if allocation.Snapshot.Status != council.Accepted {
+		t.Fatal("allocation majority not persisted")
+	}
+	gate := func(id, kind, subject, digest string, want bool) {
+		t.Helper()
+		tx, e := pool.Begin(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer tx.Rollback(ctx)
+		_, e = councilstore.LockAccepted(ctx, tx, project, id, kind, subject, digest)
+		if (e == nil) != want {
+			t.Fatal("incorrect exact-subject acceptance gate", kind, subject, e)
+		}
+	}
+	gate(allocation.Snapshot.ID, "allocation", "task:1.1", revisedContract.Hash, false)
+	planHash := reconsidered.Snapshot.Rounds[0].Hash
+	for i := 0; i < 3; i++ {
+		reconsidered, err = restarted.Vote(ctx, tokens[i], reconsidered.Snapshot.ID, 1, planHash, council.Approve)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	gate(allocation.Snapshot.ID, "allocation", "task:1.1", revisedContract.Hash, true)
+	gate(allocation.Snapshot.ID, "allocation", "task:1.2", revisedContract.Hash, false)
+	gate(allocation.Snapshot.ID, "review", "task:1.1", revisedContract.Hash, false)
+	gate(allocation.Snapshot.ID, "allocation", "task:1.1", strings.Repeat("f", 64), false)
+	gate(otherAllocation.Snapshot.ID, "allocation", "task:1.2", revisedContract.Hash, false)
+	if _, err = queue.Control(ctx, human, project, exhaustedRoot.ID, "pause", 1); err != nil {
+		t.Fatal(err)
+	}
+	gate(allocation.Snapshot.ID, "allocation", "task:1.1", revisedContract.Hash, false)
+	forged, err := council.Restore(otherAllocation.Snapshot, otherAllocation.Material)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,10 +409,10 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 		}
 	}
 	forgedJSON, _ := json.Marshal(forged.Snapshot())
-	if _, err = pool.Exec(ctx, `UPDATE mailbox.council_decisions SET snapshot=$2 WHERE id=$1`, reconsidered.Snapshot.ID, forgedJSON); err != nil {
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.council_decisions SET snapshot=$2 WHERE id=$1`, otherAllocation.Snapshot.ID, forgedJSON); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = restarted.Get(ctx, tokens[0], reconsidered.Snapshot.ID); !errors.Is(err, councilstore.ErrUnavailable) {
+	if _, err = restarted.Get(ctx, tokens[0], otherAllocation.Snapshot.ID); !errors.Is(err, councilstore.ErrUnavailable) {
 		t.Fatal("snapshot-only forged majority accepted", err)
 	}
 }

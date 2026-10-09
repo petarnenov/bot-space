@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	pb "github.com/petarnenov/bot-space/api/control/v1"
 	"github.com/petarnenov/bot-space/internal/backlog"
+	"github.com/petarnenov/bot-space/internal/contracts"
 	"github.com/petarnenov/bot-space/internal/control"
 	"github.com/petarnenov/bot-space/internal/council"
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
@@ -29,9 +30,9 @@ type Store struct {
 	Identities *runneridentity.Store
 }
 type Record struct {
-	Project, Root, Contract string
-	Snapshot                council.Snapshot
-	Material                council.Material
+	Project, Root, Contract, Subject string
+	Snapshot                         council.Snapshot
+	Material                         council.Material
 }
 type Lease struct {
 	Epoch     int64
@@ -81,7 +82,8 @@ func actor(ctx context.Context, tx pgx.Tx, p authenticated, token string) error 
 func load(ctx context.Context, tx pgx.Tx, project, id string) (Record, *council.Decision, error) {
 	var r Record
 	var snap, material []byte
-	err := tx.QueryRow(ctx, `SELECT project_id::text,root_id::text,contract_id::text,snapshot,material FROM mailbox.council_decisions WHERE project_id=$1 AND id=$2 FOR UPDATE`, project, id).Scan(&r.Project, &r.Root, &r.Contract, &snap, &material)
+	var kind, previous string
+	err := tx.QueryRow(ctx, `SELECT project_id::text,root_id::text,contract_id::text,subject,kind,COALESCE(previous_id::text,''),snapshot,material FROM mailbox.council_decisions WHERE project_id=$1 AND id=$2 FOR UPDATE`, project, id).Scan(&r.Project, &r.Root, &r.Contract, &r.Subject, &kind, &previous, &snap, &material)
 	if err == pgx.ErrNoRows {
 		return r, nil, ErrForbidden
 	}
@@ -91,7 +93,11 @@ func load(ctx context.Context, tx pgx.Tx, project, id string) (Record, *council.
 	if json.Unmarshal(snap, &r.Snapshot) != nil || json.Unmarshal(material, &r.Material) != nil {
 		return r, nil, ErrUnavailable
 	}
-	if r.Snapshot.ID != id {
+	if r.Snapshot.ID != id || r.Snapshot.Kind != kind || r.Snapshot.PreviousID != previous {
+		return r, nil, ErrUnavailable
+	}
+	members, _ := json.Marshal(r.Snapshot.Members)
+	if security.Hash(string(members)) != r.Material.CouncilRevision {
 		return r, nil, ErrUnavailable
 	}
 	d, err := council.Restore(r.Snapshot, r.Material)
@@ -109,13 +115,23 @@ func source(ctx context.Context, tx pgx.Tx, project, contract string) (string, c
 	var root, digest string
 	var revision int
 	var epoch int64
-	err := tx.QueryRow(ctx, `SELECT c.root_id::text,c.root_revision,i.lifecycle_epoch,c.content_hash
+	var raw []byte
+	var repository int64
+	err := tx.QueryRow(ctx, `SELECT c.root_id::text,c.root_revision,i.lifecycle_epoch,c.content_hash,c.content,c.repository_id
  FROM mailbox.work_contracts c JOIN mailbox.human_intentions i ON i.project_id=c.project_id AND i.id=c.root_id
 	JOIN mailbox.orchestration_projects p ON p.id=c.project_id AND p.active AND p.repository_id=c.repository_id
  JOIN mailbox.contract_validations v ON v.project_id=c.project_id AND v.contract_id=c.id AND v.contract_hash=c.content_hash
- WHERE c.project_id=$1 AND c.id=$2`, project, contract).Scan(&root, &revision, &epoch, &digest)
+ WHERE c.project_id=$1 AND c.id=$2`, project, contract).Scan(&root, &revision, &epoch, &digest, &raw, &repository)
 	if err != nil {
 		return "", council.Material{}, ErrStale
+	}
+	var content contracts.Content
+	if json.Unmarshal(raw, &content) != nil {
+		return "", council.Material{}, ErrUnavailable
+	}
+	canonical, actual, err := content.Canonical()
+	if err != nil || actual != digest || canonical.ProjectID != project || canonical.RootID != root || canonical.RootRevision != revision || canonical.RepositoryID != repository {
+		return "", council.Material{}, ErrUnavailable
 	}
 	if backlog.LockExecutable(ctx, tx, project, root, revision, epoch) != nil {
 		return "", council.Material{}, ErrStale
@@ -157,19 +173,20 @@ func persist(ctx context.Context, tx pgx.Tx, r Record, d *council.Decision) erro
 }
 
 // OpenPlan uses one durable head per root. A new label cannot reset exhaustion.
-// Other operational kinds will bind their authoritative work/question records
+// Allocation decisions bind verified task subjects; remaining operational kinds
+// will bind their authoritative work/question records
 // through the same transaction machinery when those records are introduced.
 func (s *Store) OpenPlan(ctx context.Context, token, contract string, proposal council.Proposal) (Record, error) {
-	return s.openPlan(ctx, token, contract, proposal, false)
+	return s.openDecision(ctx, token, contract, "plan", "root", proposal, false)
 }
 func (s *Store) ReconsiderPlan(ctx context.Context, token, contract string, proposal council.Proposal) (Record, error) {
-	return s.openPlan(ctx, token, contract, proposal, true)
+	return s.openDecision(ctx, token, contract, "plan", "root", proposal, true)
 }
-func (s *Store) openPlan(ctx context.Context, token, contract string, proposal council.Proposal, reconsider bool) (Record, error) {
+func (s *Store) openDecision(ctx context.Context, token, contract, kind, subject string, proposal council.Proposal, reconsider bool) (Record, error) {
 	if !security.ValidUUID(contract) {
 		return Record{}, council.ErrInvalid
 	}
-	if !planProposal(proposal, contract) {
+	if kind == "plan" && !planProposal(proposal, contract) {
 		return Record{}, council.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -190,8 +207,11 @@ func (s *Store) openPlan(ctx context.Context, token, contract string, proposal c
 	if err = actor(ctx, tx, p, token); err != nil {
 		return Record{}, err
 	}
-	// The lock is scoped by project/root/kind, before reading or creating a head.
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, p.ProjectID+":"+root+":plan"); err != nil {
+	if err = s.proposal(ctx, tx, p, contract, kind, subject, proposal); err != nil {
+		return Record{}, err
+	}
+	// The lock is scoped by project/root/kind/subject before reading or creating a head.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, p.ProjectID+":"+root+":"+kind+":"+subject); err != nil {
 		return Record{}, ErrUnavailable
 	}
 	rows, err := tx.Query(ctx, `SELECT r.id::text,r.owner_github_id,p.repository_id,p.repository_owner_id,p.repository_owner,p.repository_name FROM mailbox.project_runners r JOIN mailbox.orchestration_projects p ON p.id=r.project_id WHERE r.project_id=$1 AND r.role='architect' AND r.active ORDER BY r.id FOR SHARE OF r,p`, p.ProjectID)
@@ -230,7 +250,7 @@ func (s *Store) openPlan(ctx context.Context, token, contract string, proposal c
 	memberJSON, _ := json.Marshal(members)
 	material.CouncilRevision = security.Hash(string(memberJSON))
 	var head string
-	err = tx.QueryRow(ctx, `SELECT decision_id::text FROM mailbox.council_heads WHERE project_id=$1 AND root_id=$2 AND kind='plan'`, p.ProjectID, root).Scan(&head)
+	err = tx.QueryRow(ctx, `SELECT decision_id::text FROM mailbox.council_heads WHERE project_id=$1 AND root_id=$2 AND kind=$3 AND subject=$4`, p.ProjectID, root, kind, subject).Scan(&head)
 	if err != nil && err != pgx.ErrNoRows {
 		return Record{}, ErrUnavailable
 	}
@@ -264,13 +284,13 @@ func (s *Store) openPlan(ctx context.Context, token, contract string, proposal c
 	}
 	var d *council.Decision
 	if previous == nil {
-		d, err = council.New(id, "plan", members, material, proposal)
+		d, err = council.New(id, kind, members, material, proposal)
 	} else if previous.Snapshot().Status != council.Blocked &&
 		(material.RootRevision != previous.Material().RootRevision || material.SpecDigest != previous.Material().SpecDigest) {
 		// New authoritative input invalidates an earlier in-flight or accepted
 		// plan. Preserve that history and link its replacement; caller labels
 		// and membership changes alone cannot take this path.
-		d, err = council.New(id, "plan", members, material, proposal)
+		d, err = council.New(id, kind, members, material, proposal)
 		if err == nil {
 			snapshot := d.Snapshot()
 			snapshot.PreviousID = previous.Snapshot().ID
@@ -282,14 +302,14 @@ func (s *Store) openPlan(ctx context.Context, token, contract string, proposal c
 	if err != nil {
 		return Record{}, err
 	}
-	r := Record{Project: p.ProjectID, Root: root, Contract: contract, Material: material, Snapshot: d.Snapshot()}
+	r := Record{Project: p.ProjectID, Root: root, Contract: contract, Subject: subject, Material: material, Snapshot: d.Snapshot()}
 	raw, _ := json.Marshal(r.Snapshot)
 	mat, _ := json.Marshal(material)
-	_, err = tx.Exec(ctx, `INSERT INTO mailbox.council_decisions(id,project_id,root_id,contract_id,kind,previous_id,material,snapshot) VALUES($1,$2,$3,$4,'plan',NULLIF($5,'')::uuid,$6,$7)`, id, p.ProjectID, root, contract, r.Snapshot.PreviousID, mat, raw)
+	_, err = tx.Exec(ctx, `INSERT INTO mailbox.council_decisions(id,project_id,root_id,contract_id,kind,previous_id,material,snapshot,subject) VALUES($1,$2,$3,$4,$8,NULLIF($5,'')::uuid,$6,$7,$9)`, id, p.ProjectID, root, contract, r.Snapshot.PreviousID, mat, raw, kind, subject)
 	if err != nil {
 		return Record{}, ErrUnavailable
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO mailbox.council_heads(project_id,root_id,kind,decision_id) VALUES($1,$2,'plan',$3) ON CONFLICT(project_id,root_id,kind) DO UPDATE SET decision_id=EXCLUDED.decision_id`, p.ProjectID, root, id)
+	_, err = tx.Exec(ctx, `INSERT INTO mailbox.council_heads(project_id,root_id,kind,decision_id,subject) VALUES($1,$2,$4,$3,$5) ON CONFLICT(project_id,root_id,kind,subject) DO UPDATE SET decision_id=EXCLUDED.decision_id`, p.ProjectID, root, id, kind, subject)
 	if err != nil {
 		return Record{}, ErrUnavailable
 	}
@@ -366,9 +386,19 @@ func (s *Store) Vote(ctx context.Context, token, id string, round int, hash stri
 	if err != nil {
 		return Record{}, err
 	}
+	if err = current(ctx, tx, r); err != nil {
+		return Record{}, err
+	}
 	_, material, err := source(ctx, tx, p.ProjectID, r.Contract)
 	if err != nil || material.RootRevision != r.Material.RootRevision || material.SpecDigest != r.Material.SpecDigest {
 		return Record{}, ErrStale
+	}
+	// Negative votes remain recordable if the proposed executor loses access.
+	// Approvals must still verify its current eligibility before counting support.
+	if choice == council.Approve {
+		if err = s.proposal(ctx, tx, p, r.Contract, r.Snapshot.Kind, r.Subject, r.Snapshot.Rounds[len(r.Snapshot.Rounds)-1].Proposal); err != nil {
+			return Record{}, err
+		}
 	}
 	if err = d.Cast(p.RunnerID, round, hash, choice); err != nil {
 		return Record{}, err
