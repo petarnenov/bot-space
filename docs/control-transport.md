@@ -96,3 +96,19 @@ arguments or tracked configuration. A successful JSON result must explicitly
 prove unary, status trailers, bidirectional traffic and reconnect. Local tests
 verify trusted TLS succeeds and an untrusted certificate is rejected. Public
 TCP proof remains pending until the deployed client completes successfully.
+
+## Successful public TCP proof (2026-10-09)
+
+Deployment `99905d94-08c1-427c-8bd3-9dc8bf0cf5cd` reached SUCCESS. The native
+client connected to `thomas.proxy.rlwy.net:39004` with a trusted CA and hostname
+verification and exited 0. Its result confirmed `tls`, `unary`,
+`status_trailers`, `bidirectional` and `reconnect_cursor` were all true.
+The proof used synthetic events and confirms transport, not durable storage or
+GitHub collaborator enrollment. HTTPS root, health and readiness returned 200;
+the public root displayed “Фирмата”.
+
+Selected production topology: browser/MCP HTTPS on application port 8080,
+native TLS gRPC through the TCP proxy to application port 9090. Bind this
+endpoint and trusted CA in the authenticated enrollment response. Keep diagnostic
+credentials separate from future operational runner credentials. Remove the
+probe token after testing; an idle diagnostic service is not a registered agent.

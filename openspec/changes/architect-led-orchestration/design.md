@@ -109,3 +109,5 @@ For each completed small implementation task, commit and push to the change bran
 ### Verified ingress constraint and selected transport candidate
 
 A public test on deployment `cf343487-7f56-4aed-98e4-d3c9e27bbbb8` returned HTTP 505. Railway request logs prove HTTP/2.0 downstream but HTTP/1.1 upstream on the HTTPS domain. Select a separate native TLS listener on 9090 behind the same service's TCP proxy for the next proof, preserving existing browser/MCP HTTPS. Verify server hostname and CA; do not disable TLS checks. The HTTPS-authenticated enrollment response will bind the trusted control endpoint/CA to avoid another manual grant. This candidate is not declared working until the real native client proves calls, trailers, bidirectional traffic and reconnect.
+
+The TCP candidate is now verified: deployment `99905d94-08c1-427c-8bd3-9dc8bf0cf5cd`, native client exit 0, verified CA/hostname, unary/status trailers, independent bidirectional traffic and reconnect cursor. Adopt this two-listener topology; durable replay and real collaborator credentials remain separate implementation gates. The synthetic probe is disabled after proof.
