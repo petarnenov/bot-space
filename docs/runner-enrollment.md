@@ -84,3 +84,36 @@ Real PostgreSQL/mock-GitHub integration verifies this client enrolls an architec
 and refreshes its credential. Unit tests reject unsafe origins, external login
 URLs and machine API redirects. The private key/credential journal and production
 startup CLI wiring remain pending; these tests do not claim a deployed CLI login.
+
+## Private machine state (Linux and macOS)
+
+OpenState requires an absolute owner-private directory, fixes its server/project/
+role binding and holds an exclusive flock for the lifetime of the runner. A
+second process cannot open the same state, while architect/executor directories
+on one host remain independent. The Ed25519 seed is durable across restarts.
+Files require mode 0600, the directory must exclude group/other access, and
+owner identity is checked. Directory-descriptor-relative operations and
+O_NOFOLLOW prevent reading or writing through state-file symlinks.
+
+Credential updates use an owner-private temporary file, fsync, atomic rename
+and directory fsync. Saved leases bind project/role and may be loaded after
+credential expiry for key-proved refresh; loading an expired lease does not
+make it valid for gRPC authentication. The state object does not expose secrets
+through JSON marshaling. Startup must additionally keep state outside managed
+project worktrees and confine model access to approved execution resources.
+
+Race tests cover stable identity, exclusive locks, two roles on one host,
+credential persistence/expiry and unsafe permissions/symlinks. Production CLI
+startup and native-provider filesystem confinement remain separate unfinished
+gates.
+
+State tests also executed successfully on physical Linux machine 192.168.1.223
+through VPN using a cross-compiled test binary. This verifies Linux state/lock
+behavior, not authenticated Copilot task execution. Temporary test files were
+removed after the run.
+
+Startup does not require the shell's current directory to be the project root.
+Use absolute configuration, state and repository mappings. The agent's working
+directory is the assigned task worktree, while private state remains outside
+project source. Changing shell working directory must not switch identity or
+select a different checkout implicitly.

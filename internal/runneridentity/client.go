@@ -174,8 +174,9 @@ func (c *Client) Refresh(ctx context.Context, current Lease, key ed25519.Private
 	}
 	return next, nil
 }
-func (l Lease) Validate() error {
-	if !security.ValidUUID(l.RunnerID) || !security.ValidUUID(l.ProjectID) || !validRole(l.Role) || l.Epoch == 0 || !strings.HasPrefix(l.Token, TokenPrefix) || !validNonce(strings.TrimPrefix(l.Token, TokenPrefix)) || !l.ExpiresAt.After(time.Now()) {
+func (l Lease) Validate() error { return l.validate(true) }
+func (l Lease) validate(live bool) error {
+	if !security.ValidUUID(l.RunnerID) || !security.ValidUUID(l.ProjectID) || !validRole(l.Role) || l.Epoch == 0 || !strings.HasPrefix(l.Token, TokenPrefix) || !validNonce(strings.TrimPrefix(l.Token, TokenPrefix)) || l.ExpiresAt.IsZero() || (live && !l.ExpiresAt.After(time.Now())) {
 		return ErrInvalid
 	}
 	host, port, err := net.SplitHostPort(l.Endpoint)
