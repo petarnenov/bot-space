@@ -19,6 +19,7 @@ import (
 
 	"github.com/petarnenov/bot-space/internal/agents"
 	"github.com/petarnenov/bot-space/internal/config"
+	"github.com/petarnenov/bot-space/internal/control"
 	"github.com/petarnenov/bot-space/internal/controlprobe"
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
@@ -141,6 +142,7 @@ func run(logger *slog.Logger) error {
 	server := httpserver.New(func(ctx context.Context) error { return database.Ready(ctx, pool, versions) }, logger)
 	loginLimit, mcpPeerLimit := ratelimit.New(20, 5, 10000, nil), ratelimit.New(120, 60, 10000, nil)
 	server.Use(func(next http.Handler) http.Handler { return ratelimit.PeerAdmission(loginLimit, mcpPeerLimit, next) })
+	var runnerIdentities *runneridentity.Store
 	if identityConfig.Enabled {
 		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
 		web.Register(server)
@@ -149,7 +151,8 @@ func run(logger *slog.Logger) error {
 			if err != nil {
 				return err
 			}
-			(&runneridentity.Web{Store: &runneridentity.Store{Pool: pool, Authority: authority}, Browser: web, ControlEndpoint: runnerIdentityConfig.ControlEndpoint, ControlCA: runnerIdentityConfig.ControlCA}).Register(server)
+			runnerIdentities = &runneridentity.Store{Pool: pool, Authority: authority}
+			(&runneridentity.Web{Store: runnerIdentities, Browser: web, ControlEndpoint: runnerIdentityConfig.ControlEndpoint, ControlCA: runnerIdentityConfig.ControlCA}).Register(server)
 		}
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
 		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, MailboxEnabled: mailboxConfig.Enabled}).Register(server)
@@ -162,7 +165,31 @@ func run(logger *slog.Logger) error {
 		server.Handle("/mcp", mcpserver.New(store, mailboxConfig.AllowedOrigins))
 	}
 	grpcFailure := make(chan error, 1)
-	if token := os.Getenv("CONTROL_PROBE_TOKEN"); token != "" {
+	if runnerIdentities != nil {
+		if os.Getenv("CONTROL_PROBE_TOKEN") != "" {
+			return errors.New("identity service cannot share diagnostic credentials")
+		}
+		pair, err := tls.X509KeyPair([]byte(os.Getenv("CONTROL_TLS_CERT")), []byte(os.Getenv("CONTROL_TLS_KEY")))
+		if err != nil {
+			return errors.New("invalid control TLS configuration")
+		}
+		rpc, err := control.New(runnerIdentities.Authenticate, runneridentity.IdentityBackend{}, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12})))
+		if err != nil {
+			return err
+		}
+		nativeListener, err := net.Listen("tcp", "0.0.0.0:9090")
+		if err != nil {
+			return errors.New("control listener unavailable")
+		}
+		defer rpc.Stop()
+		defer nativeListener.Close()
+		go func() {
+			if err := rpc.Serve(nativeListener); err != nil && ctx.Err() == nil {
+				grpcFailure <- errors.New("control serving failed")
+				stop()
+			}
+		}()
+	} else if token := os.Getenv("CONTROL_PROBE_TOKEN"); token != "" {
 		cert, key := os.Getenv("CONTROL_TLS_CERT"), os.Getenv("CONTROL_TLS_KEY")
 		if cert != "" || key != "" {
 			pair, err := tls.X509KeyPair([]byte(cert), []byte(key))
