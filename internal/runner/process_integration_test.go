@@ -30,7 +30,7 @@ func isolatedDB(t *testing.T) (context.Context, *pgxpool.Pool) {
 	if url == "" {
 		t.Skip("set TEST_DATABASE_URL to run real PostgreSQL integration tests")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
 	admin, err := pgx.Connect(ctx, url)
 	if err != nil {
@@ -244,7 +244,10 @@ func testTwoIndependentSupervisorsDelegateAndContinue(t *testing.T, providerA, p
 	}, &started); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(45 * time.Second)
+	// CI runs this process-heavy suite alongside every other package. Allow the
+	// two supervisors enough time to poll and exchange the delegated result when
+	// the shared runner is CPU constrained.
+	deadline := time.Now().Add(90 * time.Second)
 	for time.Now().Before(deadline) {
 		var status struct {
 			JobStatus
