@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ type State struct {
 	dir, lock  *os.File
 	profile    stateProfile
 	privateKey ed25519.PrivateKey
+	local      *net.UnixListener
 }
 
 var ErrStateLocked = errors.New("runner state is already in use")
@@ -233,6 +235,10 @@ func (s *State) LoadLease(project string) (Lease, error) {
 func (s *State) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.local != nil {
+		s.local.Close()
+		s.local = nil
+	}
 	for i := range s.privateKey {
 		s.privateKey[i] = 0
 	}

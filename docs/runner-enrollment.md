@@ -253,3 +253,28 @@ verify automatic multi-scope acquisition, safe output and connection cleanup.
 This completes the identity startup component; task dispatch, model sessions and
 durable event replay remain separate unimplemented runtime tasks. identity_ready
 must not be presented as available execution capacity or completed work.
+
+## Independent roles on one host
+
+Run in separate terminals using private state directories:
+
+```sh
+runner serve --server https://bot-space-production.up.railway.app --state /private/architect --role architect --project bb25680f-eeea-4cde-b229-ddec09961c73 --no-open
+runner serve --server https://bot-space-production.up.railway.app --state /private/executor --role executor --project bb25680f-eeea-4cde-b229-ddec09961c73 --no-open
+```
+
+Repeat --project for eligible scopes; identity/key/process lock is per role,
+while credential files are per project. State directories must be private and
+outside managed source. Startup cwd does not select the project. ListenLocal
+binds a separate owner-only Unix socket per canonical state directory. The
+exclusive state lock protects stale-socket cleanup; non-socket/foreign/public
+entries are rejected. Shutdown removes the owned socket. Bridge handlers and
+role/task capabilities attach later; bound sockets currently expose no API.
+
+Live production-backed concurrent startup on the Mac verified architect
+`71a80d7f-e92d-495f-83c1-7d114bc8e217` at epoch 4 and executor
+`fd5e23ff-ebb4-403d-8f70-5c7449cdfd2b` at epoch 1. Both stayed active together;
+checks confirmed different keys, tokens and mode-0600 socket paths. Both exited
+0 after SIGINT. This verifies identity concurrency, not model execution.
+Multi-project journal and same-GitHub-actor scope tests use isolated PostgreSQL
+and local fixtures; no second physical production repository was invented.

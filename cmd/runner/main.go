@@ -90,6 +90,9 @@ func run(ctx context.Context, args []string, out io.Writer, open func(string) er
 		}
 	}
 	if args[0] == "serve" {
+		if _, err := state.ListenLocal(); err != nil {
+			return err
+		}
 		return serveIdentity(ctx, session, scopes, open, out, connectIdentity)
 	}
 	seen := map[string]bool{}
