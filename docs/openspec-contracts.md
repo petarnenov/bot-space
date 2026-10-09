@@ -40,3 +40,17 @@ Real-PG tests verify executor denial, durable replay/restart, changed input
 rejection, unchanged historical provenance and one publication audit. Migration
 0008 has not been applied to production yet. Contract delivery/API and actual
 artifact-evidence gathering remain under implementation.
+
+## Committed artifact verification
+
+Content.VerifyGit checks an exact commit in an explicitly configured absolute
+checkout and reads artifact blobs from that commit, not dirty working files.
+It rejects missing commits, missing paths, symlink/non-file Git modes, oversized
+blobs and mismatched SHA-256. Git is invoked with argument arrays and a bounded
+technical context; repository/object replacement environment overrides are not
+inherited. Verification does not execute repository code.
+
+Tests use an isolated real Git repository to prove dirty files do not replace
+committed evidence and false commit/digest claims fail. OpenSpec CLI semantic
+validation and scenario/task-reference extraction remain pending; these Git
+checks alone do not prove a complete valid specification or council acceptance.
