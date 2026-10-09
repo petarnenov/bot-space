@@ -179,7 +179,7 @@ func runIdentity(ctx context.Context, args []string, out io.Writer, open func(st
 	}
 	if *noOpen {
 		open = func(url string) error {
-			_, err := fmt.Fprintln(out, "Open GitHub sign-in:", url)
+			err := printSignInURL(out, url, terminalHyperlinks(out))
 			if err != nil {
 				return errors.New("login URL output unavailable")
 			}

@@ -137,8 +137,11 @@ the state directory is independent of the projects. The current CLI requires
 at least one project UUID. For now, `RUNNER_PROJECTS` defaults to the current
 project `bb25680f-eeea-4cde-b229-ddec09961c73`; override it with a space-separated
 list to select other project scopes. Override `RUNNER_SERVER` or
-`RUNNER_STATE` for another setup. Follow the printed sign-in URL when
-authorization is required; stop with Ctrl+C.
+`RUNNER_STATE` for another setup. When authorization is required, the sign-in URL
+appears on its own line. In supporting macOS terminals, use Cmd+click to open it,
+including when the URL wraps across lines. Redirected output and `TERM=dumb`
+use plain text; copy the full URL into your browser if needed. Both Make targets
+pass `--no-open`, so the browser opens when you follow the link. Stop with Ctrl+C.
 
 Use `make help` for runner, OpenSpec, test-database, and Railway wrapper targets.
 
