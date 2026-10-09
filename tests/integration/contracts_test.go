@@ -61,12 +61,29 @@ func TestContractPublicationAuthorityRevisionAndRestart(t *testing.T) {
 	if err != nil || loaded.Hash != first.Hash {
 		t.Fatal("durable contract missing", err)
 	}
+	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("unverified contract passed allocator gate", err)
+	}
+	// Explicit trusted validation-record fixture isolates the SQL gate; actual
+	// Git/OpenSpec verification is covered by real-CLI tests in contracts.
+	if _, err = pool.Exec(ctx, `INSERT INTO mailbox.contract_validations(project_id,contract_id,contract_hash,validator_runner_id) VALUES($1,$2,$3,$4)`, project, first.ID, first.Hash, first.Publisher); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); err != nil {
+		t.Fatal("verified bound record rejected", err)
+	}
+	if err = store.RequireValidated(ctx, project, first.ID, strings.Repeat("c", 64)); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("different hash inherited evidence", err)
+	}
 	input.Description = "Revised human scope"
 	if _, err = queue.Revise(ctx, humanSecret, root.ID, 1, input); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = store.Publish(ctx, tokens["architect"], content); !errors.Is(err, contracts.ErrStale) {
 		t.Fatal("old input revision republished", err)
+	}
+	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("changed root inherited validation evidence", err)
 	}
 	loaded, err = store.Get(ctx, tokens["architect"], project, first.ID)
 	if err != nil || loaded.Content.RootRevision != 1 {

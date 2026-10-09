@@ -72,3 +72,20 @@ These checks target the current standard spec-driven contract format; custom
 schemas with different artifact layouts require an explicit extension rather
 than silent reinterpretation. Durable validation evidence/approval wiring still
 must prevent unverified publication from being assigned for execution.
+
+## Durable validation evidence and allocator gate
+
+Validator.Validate resolves a checkout through an operator-configured mapping,
+loads an authenticated architect contract, verifies its canonical hash and runs
+committed Git/OpenSpec checks. It then reauthenticates the publisher scope and
+records validation for the exact contract hash/current human revision. Models
+cannot supply a successful-validation boolean, checkout or executable path.
+
+Migration 0009 stores validation records separately from publication/approval.
+RequireValidated rejects missing records, different hashes, inactive projects,
+terminal roots and changed human revisions. It does not replace council approval;
+the allocator must enforce both inside its authoritative assignment transaction.
+Real-PG SQL-gate tests use an explicitly inserted trusted validation fixture,
+while real-Git/CLI tests verify the producer's artifact checks. Full producer/
+storage integration and allocation wiring remain pending; neither migration
+0008 nor 0009 has been deployed to production yet.
