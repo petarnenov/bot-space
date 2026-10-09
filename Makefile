@@ -1,8 +1,8 @@
 .PHONY: \
-	help \
+	help doctor setup \
 	compose-up compose-down compose-logs compose-recreate-app \
 	test-db-up test-db-down \
-	migrate serve runner runner-executor runner-architect \
+	migrate serve runner executor architect runner-executor runner-architect \
 	fmt-check mod-verify vet test test-package test-race test-race-package build vulncheck \
 	openspec-validate-all openspec-validate-change openspec-list openspec-status openspec-apply openspec-archive \
 	claude-smoke \
@@ -24,15 +24,18 @@ RUNNER_STATE ?= $(HOME)/.bot-space/$(RUNNER_ROLE)
 
 help:
 	@echo "Common targets:"
+	@echo "  make doctor                     # check local tools and show installation instructions"
+	@echo "  make setup                      # download Go dependencies and build binaries in bin/"
 	@echo "  make compose-up                 # docker compose up --build -d"
 	@echo "  make compose-down               # docker compose down"
 	@echo "  make test-db-up                # local postgres on $(TEST_DB_PORT) for TEST_DATABASE_URL"
 	@echo "  make test-db-down              # stop/remove local test postgres"
 	@echo "  make migrate                    # go run ./cmd/mailbox migrate"
 	@echo "  make serve                      # go run ./cmd/mailbox serve"
-	@echo "  make runner RUNNER_PROJECTS='UUID [UUID ...]' [RUNNER_ROLE=architect] # build and start runner"
-	@echo "  make runner-executor RUNNER_PROJECTS='UUID [UUID ...]' # build and start executor"
-	@echo "  make runner-architect RUNNER_PROJECTS='UUID [UUID ...]' # build and start architect"
+	@echo "  make executor                   # build and start executor (alias: runner-executor)"
+	@echo "  make architect                  # build and start architect (alias: runner-architect)"
+	@echo "  make runner [RUNNER_ROLE=architect] # build and start runner (default: executor)"
+	@echo "    RUNNER_SERVER=<origin> RUNNER_PROJECTS='UUID [UUID ...]' RUNNER_STATE=<absolute-path>"
 	@echo "  make verify                     # full local verification gates"
 	@echo "  make openspec-list              # openspec list --json"
 	@echo "  make openspec-status CHANGE=<id>"
@@ -41,6 +44,17 @@ help:
 	@echo "  make claude-smoke               # real Claude turn probe (expected to fail on quota)"
 	@echo "  make railway-status             # linked Railway status"
 	@echo "  make railway-deploy MESSAGE='...'"
+
+doctor:
+	@sh scripts/doctor.sh
+
+setup:
+	@sh scripts/doctor.sh --required-only
+	go mod download
+	mkdir -p bin
+	go build -o bin/runner ./cmd/runner
+	go build -o bin/mailbox ./cmd/mailbox
+	@echo "Setup complete. Start with make executor or make architect."
 
 compose-up:
 	docker compose up --build -d
@@ -68,10 +82,10 @@ migrate:
 serve:
 	go run ./cmd/mailbox serve
 
-runner-executor:
+executor runner-executor:
 	$(MAKE) runner RUNNER_ROLE=executor
 
-runner-architect:
+architect runner-architect:
 	$(MAKE) runner RUNNER_ROLE=architect
 
 runner:

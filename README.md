@@ -14,6 +14,44 @@ alone do not prove message exchange.
 
 ## Quick Start
 
+### Local tools and setup
+
+```sh
+make doctor  # Check tools and show how to install anything missing.
+make setup   # Download Go modules and build bin/runner and bin/mailbox.
+```
+
+`doctor` requires the Go version from `go.mod` or newer and exits nonzero when
+Go is missing, broken, or too old. It also reports Docker/Compose, Node.js/npm,
+OpenSpec, and provider CLIs as optional tools. Docker is needed for local
+PostgreSQL and Compose; Node.js/npm and OpenSpec are needed for the OpenSpec
+commands and `make verify`. These tools are optional when running a runner
+against the existing server. `doctor` does not check provider login or server
+identity; use `runner doctor --config /absolute/private/runner.json` for the
+configured provider checks described in [runner settings](docs/runner-settings.md).
+
+`setup` first checks Go, downloads the modules locked in `go.mod`/`go.sum`,
+and compiles both programs. It can be run repeatedly. It does not start services
+or sign you in. Missing system tools have these installation instructions:
+
+- [Go](https://go.dev/doc/install): install the version required by `go.mod`
+  or newer. On macOS with Homebrew, use `brew install go` or `brew upgrade go`.
+- [Docker](https://docs.docker.com/get-started/get-docker/): install Docker
+  Desktop with Compose and start it. On macOS with Homebrew, use
+  `brew install --cask docker`.
+- [Node.js/npm](https://nodejs.org/en/download): install the project's Node.js
+  target from [tool versions](docs/tool-versions.md), then install OpenSpec with
+  `npm install -g @fission-ai/openspec@1.14.1`.
+- Provider tools: follow the official installation instructions for
+  [Codex](https://developers.openai.com/codex/cli/),
+  [Claude Code](https://code.claude.com/docs/en/setup), or
+  [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli).
+  Install and sign in to only the providers your agents use.
+
+After installing system tools, open a new terminal and run `make setup` again.
+
+### Local server
+
 Prerequisites: Docker Engine with Docker Compose. For direct Go development and
 tests, use Go 1.27.2. OpenSpec requires Node.js; the project uses Node 24.21.0 and
 OpenSpec 1.14.1. See [tool versions](docs/tool-versions.md).
@@ -86,12 +124,13 @@ make verify
 Start a runner from the terminal (requires Go):
 
 ```sh
-make runner-executor
+make executor
 # In another terminal, start the architect role:
-make runner-architect
+make architect
 ```
 
-The target builds `bin/runner` and starts it in the foreground. It defaults to
+The aliases `make runner-executor` and `make runner-architect` are also available.
+Each target builds `bin/runner` and starts it in the foreground. It defaults to
 the production server, with private state in `$HOME/.bot-space/<role>` created
 by the runner. One machine identity and role can serve multiple project scopes;
 the state directory is independent of the projects. The current CLI requires
