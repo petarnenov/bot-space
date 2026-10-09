@@ -11,7 +11,7 @@
 
 ## 3. Automatic collaborator identity
 
-- [ ] 3.1 Implement owner/explicit-collaborator GitHub verification with immutable identity, bounded cache and fail-closed refresh; verify public-reader denial, outage and collaborator-removal tests and document required server configuration.
+- [x] 3.1 Implement owner/explicit-collaborator GitHub verification with immutable identity, bounded cache and fail-closed refresh; verify public-reader denial, outage and collaborator-removal tests and document required server configuration.
 - [ ] 3.2 Implement startup OAuth enrollment bound to runner key with role selection, credential issuance/refresh/revocation and no invitations; verify key/replay/role/open-stream revocation tests and document startup.
 - [ ] 3.3 Support separate architect and executor identities/state on one host; verify concurrent startup and isolated credentials, sockets and journals and document both commands.
 
