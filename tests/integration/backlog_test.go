@@ -49,6 +49,23 @@ func TestHumanBacklogDurableIdempotencyAndAuthentication(t *testing.T) {
 	if _, err = store.Create(ctx, "bsr_machine-credential", input); !errors.Is(err, backlog.ErrForbidden) {
 		t.Fatal("machine impersonated human", err)
 	}
+	updated := input
+	updated.Description = "Export records with verified filters"
+	newer, err := store.Revise(ctx, secret, first.ID, 1, updated)
+	if err != nil || newer.Revision != 2 {
+		t.Fatal("revision append failed", err)
+	}
+	original, err := store.Get(ctx, secret, project, first.ID, 1)
+	if err != nil || original.Description != input.Description || original.Creator != first.Creator {
+		t.Fatal("revision overwrote original provenance", err)
+	}
+	if _, err = store.Revise(ctx, secret, first.ID, 1, updated); !errors.Is(err, backlog.ErrConflict) {
+		t.Fatal("stale revision accepted", err)
+	}
+	latest, err := store.Get(ctx, secret, project, first.ID, 0)
+	if err != nil || latest.Revision != 2 || latest.Description != updated.Description {
+		t.Fatal("latest revision missing", err)
+	}
 	authority.allowed = false
 	if _, err = store.Create(ctx, secret, input); !errors.Is(err, backlog.ErrForbidden) {
 		t.Fatal("removed project access accepted", err)

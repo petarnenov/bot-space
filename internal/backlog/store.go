@@ -163,3 +163,73 @@ func read(ctx context.Context, q reader, project, id string, revision int) (Inte
 	}
 	return out, nil
 }
+
+func (s *Store) Revise(ctx context.Context, secret, id string, expected int, input Input) (Intention, error) {
+	in, err := normalize(input)
+	if err != nil || !security.ValidUUID(id) || expected < 1 {
+		return Intention{}, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	human, workspace, repo, err := s.authorize(ctx, secret, in.ProjectID)
+	if err != nil {
+		return Intention{}, err
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return Intention{}, ErrUnavailable
+	}
+	defer rollback(tx)
+	var currentUser string
+	err = tx.QueryRow(ctx, `SELECT user_id::text FROM mailbox.sessions WHERE id_hash=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND last_seen_at>clock_timestamp()-interval '30 minutes' FOR SHARE`, security.Hash(secret), human.User.ID).Scan(&currentUser)
+	if err != nil {
+		return Intention{}, ErrForbidden
+	}
+	var current int
+	var creator string
+	err = tx.QueryRow(ctx, `SELECT i.current_revision,i.creator_user_id::text FROM mailbox.human_intentions i
+ JOIN mailbox.orchestration_projects p ON p.id=i.project_id WHERE i.id=$1 AND i.project_id=$2 AND p.active
+ AND p.repository_id=$3 AND p.repository_owner_id=$4 AND p.repository_owner=$5 AND p.repository_name=$6 FOR UPDATE OF i FOR SHARE OF p`, id, in.ProjectID, repo.ID, repo.OwnerID, repo.Owner, repo.Name).Scan(&current, &creator)
+	if err != nil || creator != human.User.ID {
+		return Intention{}, ErrForbidden
+	}
+	if current != expected {
+		return Intention{}, ErrConflict
+	}
+	next := current + 1
+	_, err = tx.Exec(ctx, `INSERT INTO mailbox.human_intention_revisions(project_id,intention_id,revision,author_user_id,title,description,ticket_reference,priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, in.ProjectID, id, next, human.User.ID, in.Title, in.Description, in.Ticket, in.Priority)
+	if err != nil {
+		return Intention{}, ErrUnavailable
+	}
+	if _, err = tx.Exec(ctx, `UPDATE mailbox.human_intentions SET current_revision=$3 WHERE id=$1 AND project_id=$2`, id, in.ProjectID, next); err != nil {
+		return Intention{}, ErrUnavailable
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO mailbox.audit_events(workspace_id,actor_kind,actor_user_id,action,target_id,metadata) VALUES($1,'human',$2,'intention.revised',$3,jsonb_build_object('project_id',$4::text,'revision',$5::integer))`, workspace, human.User.ID, id, in.ProjectID, next)
+	if err != nil {
+		return Intention{}, ErrUnavailable
+	}
+	out, err := read(ctx, tx, in.ProjectID, id, next)
+	if err != nil {
+		return Intention{}, err
+	}
+	if tx.Commit(ctx) != nil {
+		return Intention{}, ErrUnavailable
+	}
+	return out, nil
+}
+func (s *Store) Get(ctx context.Context, secret, project, id string, revision int) (Intention, error) {
+	if !security.ValidUUID(project) || !security.ValidUUID(id) || revision < 0 {
+		return Intention{}, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, _, _, err := s.authorize(ctx, secret, project); err != nil {
+		return Intention{}, err
+	}
+	if revision == 0 {
+		if err := s.Pool.QueryRow(ctx, `SELECT current_revision FROM mailbox.human_intentions WHERE id=$1 AND project_id=$2`, id, project).Scan(&revision); err != nil {
+			return Intention{}, ErrForbidden
+		}
+	}
+	return read(ctx, s.Pool, project, id, revision)
+}

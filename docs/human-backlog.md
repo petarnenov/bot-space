@@ -3,7 +3,7 @@
 The project backlog stores human-originated intentions independently of runner
 credentials and legacy inbox memberships. This implementation is in progress;
 immutable first revisions, authenticated create and idempotency are implemented.
-Revision editing, listing and browser intake remain pending in OpenSpec 4.1.
+Revision append/read are implemented; listing and browser intake remain pending in OpenSpec 4.1.
 
 `backlog.Store.Create` authenticates the opaque browser session through the
 existing identity store, verifies current GitHub project access and rechecks the
@@ -29,3 +29,12 @@ No production human intake route is claimed. Run real PostgreSQL tests with
 TEST_DATABASE_URL and `go test -race ./tests/integration -run TestHumanBacklog`.
 Tests cover restart/idempotency, changed keys, machine impersonation, revoked
 sessions, removed project access and one authoritative root/audit record.
+
+The original human creator can append a revision using an expected current
+revision. The transaction locks the root and current human session, revalidates
+the project mapping and writes revision/current-pointer/audit atomically. Stale
+expected revisions conflict. Get can retrieve an exact historical revision or
+the latest input. Revisions do not overwrite the original source or silently
+change existing execution contracts; council/contract invalidation wiring is
+tracked in subsequent tasks. Tests verify unchanged original provenance and
+stale-write rejection.
