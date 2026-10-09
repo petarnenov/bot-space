@@ -1,8 +1,8 @@
 # Human backlog foundations
 
 The project backlog stores human-originated intentions independently of runner
-credentials and legacy inbox memberships. This implementation is in progress;
-immutable first revisions, authenticated create and idempotency are implemented.
+credentials and legacy inbox memberships. The human intake implementation includes immutable revisions, authenticated
+create/read/list, idempotency and browser forms.
 Revision append/read are implemented; bounded listing and CSRF-protected browser intake are implemented; human lifecycle controls remain pending in OpenSpec 4.1.
 
 `backlog.Store.Create` authenticates the opaque browser session through the
@@ -24,8 +24,8 @@ composite foreign key preventing cross-project/workspace records. Deferred
 current-revision integrity prevents roots without source input. Audit metadata
 contains references and revision, not task bodies or credentials.
 
-Migration 0007 is additive and has only been applied in isolated test databases.
-Routes are wired behind runner identity activation; migration 0007 and intake deployment are pending production verification. Run real PostgreSQL tests with
+Migration 0007 is additive and has been deployed after isolated database tests.
+Routes are enabled with runner identity; production verification is recorded below. Run real PostgreSQL tests with
 TEST_DATABASE_URL and `go test -race ./tests/integration -run TestHumanBacklog`.
 Tests cover restart/idempotency, changed keys, machine impersonation, revoked
 sessions, removed project access and one authoritative root/audit record.
@@ -50,3 +50,16 @@ Tests verify human submit, bearer/CSRF rejection and script-text escaping.
 The user also approved creator-owned pause/resume/cancel and non-destructive
 archive with retained history. Those controls are tracked separately in task
 4.3 and are not yet exposed by these intake pages.
+
+## Production verification (2026-10-09)
+
+Hosted CI 37930781666 passed PostgreSQL, race, build, vulnerability and OpenSpec
+gates. Deployment e72cacfb-fdde-4758-9713-546ea2e61514 reached SUCCESS and applied
+migration 0007. The authenticated GitHub browser opened the configured project's
+backlog with title, description, ticket reference, priority and submit control,
+without an additional invitation. Production verification did not create a
+fictional business objective. Actual submit/revision/restart/concurrent-key and
+cross-project/workspace behavior is covered by real-PG HTTP/integration tests.
+Health/readiness remained 200, GitHub login 302, unauthenticated MCP 401.
+Creator lifecycle controls remain a separate task; no autonomous execution is
+claimed from intake alone.
