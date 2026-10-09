@@ -34,8 +34,8 @@
 ## 5. End-to-End Delivery
 
 - [x] 5.1 Run complete formatting/module/vet/tests/race/build/vulnerability/OpenSpec gates including real PostgreSQL and two independent runner/bridge/provider processes; verify regression, restart, fencing, cancellation and A continuing with B's actual result.
-- [ ] 5.2 Publish reviewed source and confirm terminal green GitHub CI for its exact commit; deploy additive server support to the authorized Railway project and verify task authentication/readiness and existing mailbox behavior.
-- [ ] 5.3 Configure one runner on each of two accessible physical machines and prove a real delegated task, recipient execution and originating-session continuation over Railway; record provider versions/project/account boundaries and actual result evidence. Keep this task incomplete if second-machine access or provider authentication is unavailable.
+- [x] 5.2 Publish reviewed source and confirm terminal green GitHub CI for its exact commit; deploy additive server support to the authorized Railway project and verify task authentication/readiness and existing mailbox behavior.
+- [x] 5.3 Configure one runner on each of two accessible physical machines and prove a real delegated task, recipient execution and originating-session continuation over Railway; record provider versions/project/account boundaries and actual result evidence. Keep this task incomplete if second-machine access or provider authentication is unavailable.
 - [x] 5.4 Audit every task-delegation/machine-runner/task-observability requirement and modified mailbox scenarios against current source, CI and live evidence; document known external limits and unchanged AGENTS.md before synchronization/archive.
 
 ## Requirement-to-Check Mapping
