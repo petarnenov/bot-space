@@ -127,3 +127,9 @@ version 2 while preserving the key and any saved credential under its project
 scope. Human intent/contract chooses the target repository; allocation still
 must enforce one active executor task globally across all project connections.
 That allocator gate is not implemented by the journal alone.
+
+Credential issuance serializes claims by machine key/role and rejects a
+conflicting GitHub actor in another project. Real-PG tests verify one actor can
+hold two independent project scopes while the same key cannot change actor
+between repositories. This identity invariant does not replace the pending
+machine-wide single-task reservation enforcement.

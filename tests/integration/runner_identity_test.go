@@ -225,3 +225,53 @@ func TestRunnerCredentialOneUseRotationAndRevocation(t *testing.T) {
 		t.Fatal("wrong credential audit count", err)
 	}
 }
+
+func TestMachineRoleRetainsGitHubActorAcrossProjects(t *testing.T) {
+	ctx, pool, _, w, _ := teams(t)
+	var projects [2]string
+	for i := range projects {
+		if err := pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,$2,101,'owner','project') RETURNING id::text`, w.ID, 42+i).Scan(&projects[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authority := &runnerAuthority{allowed: map[int64]bool{101: true, 202: true}, pool: pool}
+	store := &runneridentity.Store{Pool: pool, Authority: authority}
+	public, key, _ := ed25519.GenerateKey(rand.Reader)
+	issue := func(project string, actor int64) (runneridentity.Credential, error) {
+		nonce, _ := security.Secret()
+		message, _ := runneridentity.StartMessage(project, runneridentity.Executor, nonce)
+		e, err := store.Begin(ctx, runneridentity.StartProof{ProjectID: project, Role: runneridentity.Executor, Nonce: nonce, PublicKey: public, Signature: ed25519.Sign(key, message)})
+		if err != nil {
+			return runneridentity.Credential{}, err
+		}
+		if err = store.AuthorizeGitHub(ctx, e.ID, actor); err != nil {
+			return runneridentity.Credential{}, err
+		}
+		challenge, err := store.Challenge(ctx, e.ID, "claim")
+		if err != nil {
+			return runneridentity.Credential{}, err
+		}
+		message, _ = runneridentity.ChallengeMessage(e.ID, "claim", challenge.Nonce)
+		return store.Issue(ctx, e.ID, "claim", challenge.Nonce, ed25519.Sign(key, message))
+	}
+	first, err := issue(projects[0], 101)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = issue(projects[1], 202); !errors.Is(err, runneridentity.ErrUnauthenticated) {
+		t.Fatal("same machine changed GitHub actor across projects", err)
+	}
+	second, err := issue(projects[1], 101)
+	if err != nil {
+		t.Fatal("same actor rejected in second project", err)
+	}
+	if first.RunnerID == second.RunnerID || first.ProjectID == second.ProjectID {
+		t.Fatal("project scopes mixed")
+	}
+	for _, credential := range []runneridentity.Credential{first, second} {
+		principal, err := store.Authenticate(ctx, credential.Token)
+		if err != nil || principal.ProjectID != credential.ProjectID {
+			t.Fatal("scoped authority lost", err)
+		}
+	}
+}

@@ -141,6 +141,20 @@ func (s *Store) Issue(ctx context.Context, id, purpose, nonce string, signature 
 		}
 		return Credential{}, ErrUnavailable
 	}
+	// A physical role keeps one GitHub actor across repository scopes.
+	// Serialize claims by key/role after network verification, then reject
+	// attempts to bind this key to another person on another project.
+	machineScope := security.Hash(string(public)) + ":" + string(role)
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", machineScope); err != nil {
+		return Credential{}, ErrUnavailable
+	}
+	var conflictingActor bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mailbox.project_runners WHERE public_key=$1 AND role=$2 AND owner_github_id<>$3)`, public, role, githubID).Scan(&conflictingActor); err != nil {
+		return Credential{}, ErrUnavailable
+	}
+	if conflictingActor {
+		return Credential{}, ErrUnauthenticated
+	}
 	secret, err := security.Secret()
 	if err != nil {
 		return Credential{}, ErrUnavailable
