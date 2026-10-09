@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/petarnenov/bot-space/internal/config"
@@ -134,7 +135,7 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := runneridentity.OpenState(t.TempDir(), server.URL, runneridentity.Architect)
+	state, err := runneridentity.OpenState(filepath.Join(t.TempDir(), "architect-state"), server.URL, runneridentity.Architect)
 	if err != nil {
 		t.Fatal(err)
 	}
