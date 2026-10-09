@@ -15,6 +15,7 @@ import (
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
 	"github.com/petarnenov/bot-space/internal/security"
+	"github.com/petarnenov/bot-space/internal/workallocation"
 )
 
 type councilVerifyHook func(context.Context, repositoryaccess.Repository, int64, bool) error
@@ -394,6 +395,116 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	gate(allocation.Snapshot.ID, "review", "task:1.1", revisedContract.Hash, false)
 	gate(allocation.Snapshot.ID, "allocation", "task:1.1", strings.Repeat("f", 64), false)
 	gate(otherAllocation.Snapshot.ID, "allocation", "task:1.2", revisedContract.Hash, false)
+	// Two project registrations for one key share exactly one executor slot.
+	foreignRoot, err := queue.Create(ctx, human, backlog.Input{ProjectID: foreignProject, Key: "foreign-slot", Title: "Other project work", Description: "One shared executor"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret, _ := security.Secret()
+	foreignArchToken := runneridentity.TokenPrefix + secret
+	var foreignArch string
+	if err = pool.QueryRow(ctx, `INSERT INTO mailbox.project_runners(project_id,owner_github_id,public_key,role,credential_hash,credential_expires_at) SELECT $1,101,public_key,'architect',$2,clock_timestamp()+interval '15 minutes' FROM mailbox.project_runners WHERE id=$3 RETURNING id::text`, foreignProject, security.Hash(foreignArchToken), ids[0]).Scan(&foreignArch); err != nil {
+		t.Fatal(err)
+	}
+	foreignContent := content
+	foreignContent.ProjectID = foreignProject
+	foreignContent.RootID = foreignRoot.ID
+	foreignContent.RootRevision = 1
+	foreignContent.RepositoryID = 43
+	foreignContract, err := contractStore.Publish(ctx, foreignArchToken, foreignContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `INSERT INTO mailbox.contract_validations(project_id,contract_id,contract_hash,validator_runner_id) VALUES($1,$2,$3,$4)`, foreignProject, foreignContract.ID, foreignContract.Hash, foreignArch); err != nil {
+		t.Fatal(err)
+	}
+	foreignPlan, err := restarted.OpenPlan(ctx, foreignArchToken, foreignContract.ID, council.Proposal{Actions: []council.Action{{Kind: "plan", Target: foreignContract.ID, Value: "Implement other project"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = restarted.Vote(ctx, foreignArchToken, foreignPlan.Snapshot.ID, 1, foreignPlan.Snapshot.Rounds[0].Hash, council.Approve); err != nil {
+		t.Fatal(err)
+	}
+	foreignDecision, err := restarted.OpenAllocation(ctx, foreignArchToken, foreignContract.ID, "1.1", council.Proposal{Actions: []council.Action{{Kind: "assign", Target: foreignExecutor, Value: "1.1"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = restarted.Vote(ctx, foreignArchToken, foreignDecision.Snapshot.ID, 1, foreignDecision.Snapshot.Rounds[0].Hash, council.Approve); err != nil {
+		t.Fatal(err)
+	}
+	executorTokens := []string{}
+	for _, runner := range []string{executor, foreignExecutor} {
+		s, _ := security.Secret()
+		token := runneridentity.TokenPrefix + s
+		executorTokens = append(executorTokens, token)
+		if _, err = pool.Exec(ctx, `UPDATE mailbox.project_runners SET credential_hash=$2,credential_expires_at=clock_timestamp()+interval '15 minutes' WHERE id=$1`, runner, security.Hash(token)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	allocator := &workallocation.Store{Pool: pool, Identities: identities}
+	client := workallocation.Client{Agent: "codex", Version: "test-fixture", Tools: []string{"git", "openspec"}}
+	for _, token := range executorTokens {
+		if err = allocator.Presence(ctx, token, true, client); err != nil {
+			t.Fatal(err)
+		}
+		if busy, e := allocator.Busy(ctx, token); e != nil || busy {
+			t.Fatal("new executor advertised busy", e)
+		}
+	}
+	type assignmentResult struct {
+		assignment      workallocation.Assignment
+		token, decision string
+		err             error
+	}
+	assigned := make(chan assignmentResult, 2)
+	for _, request := range []struct{ token, decision string }{{tokens[0], allocation.Snapshot.ID}, {foreignArchToken, foreignDecision.Snapshot.ID}} {
+		go func(token, decision string) {
+			a, e := allocator.Assign(ctx, token, decision)
+			assigned <- assignmentResult{a, token, decision, e}
+		}(request.token, request.decision)
+	}
+	accepted, rejected := <-assigned, <-assigned
+	if accepted.err != nil {
+		accepted, rejected = rejected, accepted
+	}
+	if accepted.err != nil || !errors.Is(rejected.err, workallocation.ErrOccupied) {
+		t.Fatal("cross-project assignments both reserved one machine", accepted.err, rejected.err)
+	}
+	retried, err := allocator.Assign(ctx, accepted.token, accepted.decision)
+	if err != nil || retried.ID != accepted.assignment.ID || retried.Generation != 1 {
+		t.Fatal("assignment retry created new work", err)
+	}
+	for _, token := range executorTokens {
+		if busy, e := allocator.Busy(ctx, token); e != nil || !busy {
+			t.Fatal("occupied slot not shared across scopes", e)
+		}
+		if err = allocator.Presence(ctx, token, true, client); err != nil {
+			t.Fatal("same-client busy heartbeat failed", err)
+		}
+	}
+	changedClient := client
+	changedClient.Agent = "copilot"
+	if err = allocator.Presence(ctx, executorTokens[0], true, changedClient); !errors.Is(err, workallocation.ErrOccupied) {
+		t.Fatal("occupied machine switched providers", err)
+	}
+	for _, state := range []string{"question_wait", "interrupted"} {
+		if _, err = pool.Exec(ctx, `UPDATE mailbox.work_assignments SET state=$2 WHERE id=$1`, accepted.assignment.ID, state); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = allocator.Assign(ctx, rejected.token, rejected.decision); !errors.Is(err, workallocation.ErrOccupied) {
+			t.Fatal("waiting or uncertain work freed its slot", state, err)
+		}
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.executor_presence SET lease_until=clock_timestamp()-interval '1 second'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = allocator.Assign(ctx, rejected.token, rejected.decision); !errors.Is(err, workallocation.ErrOccupied) {
+		t.Fatal("presence expiration freed uncertain work", err)
+	}
+	var count int
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.work_assignments`).Scan(&count); err != nil || count != 1 {
+		t.Fatal("concurrent reservation created extra assignments", err)
+	}
 	if _, err = queue.Control(ctx, human, project, exhaustedRoot.ID, "pause", 1); err != nil {
 		t.Fatal(err)
 	}
