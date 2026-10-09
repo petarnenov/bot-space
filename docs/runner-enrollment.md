@@ -153,9 +153,10 @@ never the lease or bearer token. This authentication entrypoint does not yet
 implement the final automatic `serve` execution/control runtime.
 
 Enable HTTP enrollment with RUNNER_IDENTITY_ENABLED=true only after configuring
-GITHUB_REPOSITORY_TOKEN, CONTROL_ENDPOINT, CONTROL_TLS_CERT and CONTROL_TLS_KEY.
-The verification token needs repository metadata access; it is not an OAuth
-client secret. Certificate hostname must match the native endpoint. The switch
+GITHUB_APP_CLIENT_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY,
+CONTROL_ENDPOINT, CONTROL_TLS_CERT and CONTROL_TLS_KEY.
+The App needs Metadata read and generates its verification token automatically.
+App private keys and browser OAuth client secrets are separate credentials. Certificate hostname must match the native endpoint. The switch
 is off by default, preserving the existing browser/mailbox deployment. Configured
 projects must exist in PostgreSQL; project setup and live activation remain
 pending. Do not interpret enabled HTTP identity as a ready execution backend.

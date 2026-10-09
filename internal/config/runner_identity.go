@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/petarnenov/bot-space/internal/githubapp"
 	"net"
 	"strconv"
 	"strings"
@@ -13,7 +14,7 @@ import (
 // unfinished orchestration execution runtime. Secrets remain server-side.
 type RunnerIdentity struct {
 	Enabled         bool
-	RepositoryToken string
+	AppTokens       *githubapp.Tokens
 	ControlEndpoint string
 	ControlCA       string
 }
@@ -28,9 +29,13 @@ func LoadRunnerIdentity(getenv func(string) string) (RunnerIdentity, error) {
 	default:
 		return c, errors.New("RUNNER_IDENTITY_ENABLED must be true or false")
 	}
-	c.RepositoryToken = getenv("GITHUB_REPOSITORY_TOKEN")
-	if c.RepositoryToken == "" || len(c.RepositoryToken) > 4096 || strings.ContainsAny(c.RepositoryToken, " \t\r\n") {
-		return RunnerIdentity{}, errors.New("GitHub repository verification configuration is required")
+	installation, err := strconv.ParseInt(getenv("GITHUB_APP_INSTALLATION_ID"), 10, 64)
+	if err != nil {
+		return RunnerIdentity{}, errors.New("valid GITHUB_APP_INSTALLATION_ID is required")
+	}
+	c.AppTokens, err = githubapp.New(getenv("GITHUB_APP_CLIENT_ID"), installation, []byte(getenv("GITHUB_APP_PRIVATE_KEY")))
+	if err != nil {
+		return RunnerIdentity{}, errors.New("complete GitHub App verification configuration is required")
 	}
 	c.ControlEndpoint = getenv("CONTROL_ENDPOINT")
 	host, port, err := net.SplitHostPort(c.ControlEndpoint)

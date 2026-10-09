@@ -107,7 +107,7 @@ func run(logger *slog.Logger) error {
 		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
 		web.Register(server)
 		if runnerIdentityConfig.Enabled {
-			authority, err := repositoryaccess.New(func(context.Context) (string, error) { return runnerIdentityConfig.RepositoryToken, nil })
+			authority, err := repositoryaccess.New(runnerIdentityConfig.AppTokens.Token)
 			if err != nil {
 				return err
 			}

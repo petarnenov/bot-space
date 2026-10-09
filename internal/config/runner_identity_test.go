@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
@@ -17,13 +19,15 @@ func TestRunnerIdentityConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	values := map[string]string{"RUNNER_IDENTITY_ENABLED": "true", "GITHUB_REPOSITORY_TOKEN": "synthetic-token", "CONTROL_ENDPOINT": "127.0.0.1:9090", "CONTROL_TLS_CERT": cert, "CONTROL_TLS_KEY": string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key}))}
+	appKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	appPEM := string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(appKey)}))
+	values := map[string]string{"RUNNER_IDENTITY_ENABLED": "true", "GITHUB_APP_CLIENT_ID": "app-client-id", "GITHUB_APP_INSTALLATION_ID": "42", "GITHUB_APP_PRIVATE_KEY": appPEM, "CONTROL_ENDPOINT": "127.0.0.1:9090", "CONTROL_TLS_CERT": cert, "CONTROL_TLS_KEY": string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key}))}
 	get := func(name string) string { return values[name] }
 	c, err := LoadRunnerIdentity(get)
 	if err != nil || !c.Enabled || c.ControlCA != cert {
 		t.Fatal("valid identity configuration rejected", err)
 	}
-	for _, name := range []string{"GITHUB_REPOSITORY_TOKEN", "CONTROL_ENDPOINT", "CONTROL_TLS_CERT", "CONTROL_TLS_KEY"} {
+	for _, name := range []string{"GITHUB_APP_CLIENT_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY", "CONTROL_ENDPOINT", "CONTROL_TLS_CERT", "CONTROL_TLS_KEY"} {
 		old := values[name]
 		values[name] = ""
 		if _, err := LoadRunnerIdentity(get); err == nil {

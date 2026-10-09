@@ -50,3 +50,13 @@ provisioned production integration credentials.
 
 API behavior and required permissions follow the official
 [GitHub collaborator documentation](https://docs.github.com/en/rest/collaborators/collaborators#list-repository-collaborators).
+
+## Selected deployment integration
+
+The current server integration uses GitHub App installation tokens rather than
+GITHUB_REPOSITORY_TOKEN. Configure GITHUB_APP_CLIENT_ID,
+GITHUB_APP_INSTALLATION_ID and GITHUB_APP_PRIVATE_KEY server-side. The token
+provider requests Metadata read only, signs short-lived App JWTs, shares cached
+installation tokens and renews before expiry. An unsuccessful refresh returns
+no stale token. The App must be installed on the repositories the platform
+serves; this setup does not grant individual runners additional roles.
