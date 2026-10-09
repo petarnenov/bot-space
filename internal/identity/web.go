@@ -88,8 +88,16 @@ func (w *Web) Protect(mutation bool, next func(http.ResponseWriter, *http.Reques
 			return
 		}
 		if mutation {
-			if !w.sameOrigin(r) || r.ParseForm() != nil || !security.Equal(r.PostForm.Get("csrf_token"), session.CSRF) {
-				http.Error(rw, "This form expired or came from another site. Reload the page and try again.", http.StatusForbidden)
+			if !w.sameOrigin(r) {
+				http.Error(rw, "This request did not come from the application. Reload the page and try again.", http.StatusForbidden)
+				return
+			}
+			if r.ParseForm() != nil {
+				http.Error(rw, "This form could not be read. Reload the page and try again.", http.StatusBadRequest)
+				return
+			}
+			if !security.Equal(r.PostForm.Get("csrf_token"), session.CSRF) {
+				http.Error(rw, "This form expired. Reload the page and try again.", http.StatusForbidden)
 				return
 			}
 		}
@@ -101,8 +109,14 @@ func (w *Web) sameOrigin(r *http.Request) bool {
 	if origins := r.Header.Values("Origin"); len(origins) > 0 {
 		return len(origins) == 1 && origins[0] == w.Config.BaseURL
 	}
-	u, err := url.Parse(r.Referer())
-	return err == nil && u.Scheme != "" && u.User == nil && u.Scheme+"://"+u.Host == w.Config.BaseURL
+	if referer := r.Referer(); referer != "" {
+		u, err := url.Parse(referer)
+		return err == nil && u.Scheme != "" && u.User == nil && u.Scheme+"://"+u.Host == w.Config.BaseURL
+	}
+	// Referrer-Policy intentionally suppresses Referer. Modern browsers still
+	// send Fetch Metadata, which identifies a same-origin form submission
+	// without disclosing the page URL. The CSRF token remains mandatory.
+	return r.Header.Get("Sec-Fetch-Site") == "same-origin"
 }
 
 func (w *Web) login(rw http.ResponseWriter, r *http.Request) {
