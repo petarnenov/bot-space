@@ -159,3 +159,12 @@ client secret. Certificate hostname must match the native endpoint. The switch
 is off by default, preserving the existing browser/mailbox deployment. Configured
 projects must exist in PostgreSQL; project setup and live activation remain
 pending. Do not interpret enabled HTTP identity as a ready execution backend.
+
+## Open-stream revocation evidence
+
+The real-PG/mock-GitHub integration also opens a native gRPC TLS stream using an
+issued machine token and a hostname/CA-verified client. After PostgreSQL runner
+deactivation, the next frame on that same connection returns Unauthenticated
+and never reaches the fixture backend. This confirms per-frame persisted
+activation checking, not durable event storage; the fixture emits a synthetic
+receipt. Production native control wiring remains a separate unfinished gate.

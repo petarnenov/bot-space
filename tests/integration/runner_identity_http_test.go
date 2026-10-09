@@ -34,6 +34,7 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	browser := &identity.Web{Config: config.Identity{Enabled: true, ClientID: "mock-client-id", ClientSecret: "mock-client-secret", BaseURL: "http://" + server.Listener.Addr().String()}, Sessions: &identity.Sessions{Pool: pool}, Workspaces: teamsStore, Provider: identity.Provider{AuthorizeURL: provider.URL + "/authorize", TokenURL: provider.URL + "/token", UserURL: provider.URL + "/user", Client: identity.GitHubProvider().Client}}
 	browser.Register(mux)
 	certificateSource := httptest.NewTLSServer(http.NotFoundHandler())
+	pair := certificateSource.TLS.Certificates[0]
 	publicCA := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateSource.TLS.Certificates[0].Certificate[0]}))
 	certificateSource.Close()
 	(&runneridentity.Web{Store: store, Browser: browser, ControlEndpoint: "native.example:9090", ControlCA: publicCA}).Register(mux)
@@ -170,6 +171,7 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	if _, err = store.Authenticate(ctx, renewed.Token); err != nil {
 		t.Fatal(err)
 	}
+	assertRunnerRevokedOnOpenTLSStream(t, ctx, pool, store, result.Credential, pair)
 	saved, err := state.LoadLease(project)
 	if err != nil || saved.Token != renewed.Token || saved.Epoch != renewed.Epoch {
 		t.Fatal("startup session did not journal refreshed credential", err)
