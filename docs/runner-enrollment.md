@@ -30,7 +30,7 @@ Migration 0006 adds project mappings, enrollments, role-bound runner records and
 one-use challenge storage. Migration 0005 preserves the previously verified
 legacy task foundation unchanged; its dormant tables are not the new autonomous
 work runtime. New orchestration execution will have no task duration limit.
-Neither migration has been deployed to production at this stage.
+Migrations 0005/0006 were deployed during identity preparation; execution remains disabled.
 
 Run `go test -race ./internal/runneridentity` for cryptographic boundaries.
 With a configured TEST_DATABASE_URL, run
@@ -192,5 +192,17 @@ unknown workspaces, inactive mappings or changed owner/name fail closed. This
 is platform setup and creates no memberships, invitations or individual agent
 grants. Other configured repositories receive their own project IDs/scopes.
 
-Real-PG tests verify stable bootstrap and owner-change rejection. Live production
-project bootstrap has not yet been executed.
+Real-PG tests verify stable bootstrap and owner-change rejection. Live production bootstrap is verified below.
+
+## Production project bootstrap evidence (2026-10-09)
+
+Deployment `7b327639-0e65-4728-ac31-cc4ca86bd7e1` applied the six bundled
+migrations. Railway rejected a two-command pre-deploy setting, so a separate
+single-command bootstrap ran after migration completion on deployment
+`a7ffa586-514a-467c-9987-01da095925fb` (SUCCESS). Safe logs confirmed project
+`bb25680f-eeea-4cde-b229-ddec09961c73` for GitHub repository `1410902803`.
+The native service pre-deploy setting was restored to `/mailbox migrate`.
+
+Health/readiness returned 200, GitHub login 302 and unauthenticated MCP 401.
+Runner identity/execution remain disabled pending authenticated native service
+and automatic serve integration; project bootstrap alone is not task completion.
