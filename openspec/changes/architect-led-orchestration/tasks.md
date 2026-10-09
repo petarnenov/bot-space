@@ -13,7 +13,7 @@
 
 - [x] 3.1 Implement owner/explicit-collaborator GitHub verification with immutable identity, bounded cache and fail-closed refresh; verify public-reader denial, outage and collaborator-removal tests and document required server configuration.
 - [ ] 3.2 Implement startup OAuth enrollment bound to runner key with role selection, credential issuance/refresh/revocation and no invitations; verify key/replay/role/open-stream revocation tests and document startup.
-- [ ] 3.3 Support separate architect and executor identities/state on one host; verify concurrent startup and isolated credentials, sockets and journals and document both commands.
+- [ ] 3.3 Support separate architect and executor identities/state on one host and multiple eligible projects per machine role; verify concurrent startup, scoped credential isolation, stable cross-project machine/GitHub identity, sockets and journals and document both commands.
 
 ## 4. Human backlog and OpenSpec contracts
 
@@ -28,7 +28,7 @@
 
 ## 6. Single-task executor allocation
 
-- [ ] 6.1 Implement atomic majority-backed assignment with exactly one reserved task per executor across providers/projects, including waiting questions and uncertain interruptions; verify concurrent assignment and occupied-slot tests and document availability.
+- [ ] 6.1 Implement atomic majority-backed assignment with exactly one reserved task per executor across providers/projects, including waiting questions and uncertain interruptions; verify cross-project/cross-connection concurrent assignment and occupied-slot tests and document availability.
 - [ ] 6.2 Remove execution deadlines, inherited budgets and duration-based provider cancellation while retaining renewable authority leases; verify healthy execution beyond former limits and interrupted-authority reconciliation tests and document the distinction.
 - [ ] 6.3 Implement question decisions bound to contract/attempt/session and exact continuation after accepted answers; verify fresh sessions between tasks, retained context for same-task questions/review, stale answers, reconnect and occupied-slot behavior and document the local bridge.
 - [ ] 6.4 Implement artifact/evidence return, council review and safe retry/reassignment; verify late-result fencing, uncertain side effects and failed-evidence rejection without human approval and document recovery.

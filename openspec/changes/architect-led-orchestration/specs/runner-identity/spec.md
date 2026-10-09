@@ -65,3 +65,11 @@ When model or effort is omitted, the runner SHALL preserve the selected client's
 - **GIVEN** an explicitly selected model or effort unsupported by the chosen client/model
 - **WHEN** startup validation runs
 - **THEN** no work session starts and the error lists the valid available model/effort choices.
+
+### Requirement: One machine role across eligible projects
+A runner SHALL retain one machine identity and role while serving multiple configured projects. Project-scoped credentials and GitHub checks SHALL isolate repository access without creating another machine execution slot or another vote within a project. Local identity SHALL not be permanently bound to one project. The same machine key/role SHALL retain one verified GitHub actor across project scopes.
+
+#### Scenario: Different projects on one executor
+- **GIVEN** one executor eligible for two configured repositories
+- **WHEN** human-submitted work targets either repository
+- **THEN** the same runner can receive that project's authorized work and use its scoped credentials without parallel execution or project-context leakage.

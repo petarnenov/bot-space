@@ -18,10 +18,11 @@ import (
 )
 
 type stateProfile struct {
-	Version         int
-	Origin, Project string
-	Role            Role
-	KeyHash         string
+	Version int
+	Origin  string
+	Project string `json:"Project,omitempty"`
+	Role    Role
+	KeyHash string
 }
 type State struct {
 	mu         sync.Mutex
@@ -33,8 +34,8 @@ type State struct {
 var ErrStateLocked = errors.New("runner state is already in use")
 var ErrStateUnavailable = errors.New("private runner state unavailable")
 
-func OpenState(path, origin, project string, role Role) (*State, error) {
-	if !filepath.IsAbs(path) || !security.ValidUUID(project) || !validRole(role) {
+func OpenState(path, origin string, role Role) (*State, error) {
+	if !filepath.IsAbs(path) || !validRole(role) {
 		return nil, ErrInvalid
 	}
 	api, err := NewClient(origin)
@@ -86,7 +87,7 @@ func OpenState(path, origin, project string, role Role) (*State, error) {
 	}
 	s.privateKey = ed25519.NewKeyFromSeed(seed)
 	public := s.privateKey.Public().(ed25519.PublicKey)
-	expected := stateProfile{Version: 1, Origin: api.origin, Project: strings.ToLower(project), Role: role, KeyHash: security.Hash(string(public))}
+	expected := stateProfile{Version: 2, Origin: api.origin, Role: role, KeyHash: security.Hash(string(public))}
 	raw, err := s.read("profile.json", 8192)
 	if errors.Is(err, os.ErrNotExist) {
 		raw, _ = json.Marshal(expected)
@@ -97,7 +98,30 @@ func OpenState(path, origin, project string, role Role) (*State, error) {
 		return nil, err
 	} else {
 		var stored stateProfile
-		if json.Unmarshal(raw, &stored) != nil || stored != expected {
+		if json.Unmarshal(raw, &stored) != nil {
+			return nil, ErrInvalid
+		}
+		if stored.Version == 1 && stored.Origin == expected.Origin && stored.Role == expected.Role && stored.KeyHash == expected.KeyHash && security.ValidUUID(stored.Project) {
+			// Preserve an older project-bound lease under its own scope.
+			if old, err := s.read("credential.json", 256<<10); err == nil {
+				var lease Lease
+				if json.Unmarshal(old, &lease) != nil || lease.validate(false) != nil || !strings.EqualFold(lease.ProjectID, stored.Project) || lease.Role != stored.Role {
+					return nil, ErrStateUnavailable
+				}
+				if err = s.write("credential-"+strings.ToLower(lease.ProjectID)+".json", old); err != nil {
+					return nil, err
+				}
+				if unix.Unlinkat(int(s.dir.Fd()), "credential.json", 0) != nil || s.dir.Sync() != nil {
+					return nil, ErrStateUnavailable
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+			raw, _ = json.Marshal(expected)
+			if err = s.write("profile.json", raw); err != nil {
+				return nil, err
+			}
+		} else if stored != expected {
 			return nil, ErrInvalid
 		}
 	}
@@ -178,27 +202,30 @@ func (s *State) SaveLease(lease Lease) error {
 	if s.dir == nil {
 		return ErrStateUnavailable
 	}
-	if lease.Validate() != nil || lease.ProjectID != s.profile.Project || lease.Role != s.profile.Role {
+	if lease.Validate() != nil || lease.Role != s.profile.Role {
 		return ErrInvalid
 	}
 	raw, err := json.Marshal(lease)
 	if err != nil || len(raw) > 256<<10 {
 		return ErrInvalid
 	}
-	return s.write("credential.json", raw)
+	return s.write("credential-"+strings.ToLower(lease.ProjectID)+".json", raw)
 }
-func (s *State) LoadLease() (Lease, error) {
+func (s *State) LoadLease(project string) (Lease, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.dir == nil {
 		return Lease{}, ErrStateUnavailable
 	}
-	raw, err := s.read("credential.json", 256<<10)
+	if !security.ValidUUID(project) {
+		return Lease{}, ErrInvalid
+	}
+	raw, err := s.read("credential-"+strings.ToLower(project)+".json", 256<<10)
 	if err != nil {
 		return Lease{}, err
 	}
 	var lease Lease
-	if json.Unmarshal(raw, &lease) != nil || lease.validate(false) != nil || lease.ProjectID != s.profile.Project || lease.Role != s.profile.Role {
+	if json.Unmarshal(raw, &lease) != nil || lease.validate(false) != nil || !strings.EqualFold(lease.ProjectID, project) || lease.Role != s.profile.Role {
 		return Lease{}, ErrStateUnavailable
 	}
 	return lease, nil

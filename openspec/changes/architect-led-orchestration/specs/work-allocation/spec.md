@@ -66,3 +66,11 @@ An executor SHALL start a fresh model session for each new work package, seeded 
 - **GIVEN** an executor receiving a new task after its previous task terminates
 - **WHEN** it starts work and later asks architects for clarification
 - **THEN** the new task starts with a fresh seeded session and clarification resumes that same session without losing the attempted-work context.
+
+### Requirement: Human-targeted project routing and global machine capacity
+The project referenced by human input and the approved contract SHALL determine execution routing. Architects and executors SHALL operate across eligible configured projects rather than remain assigned to one fixed project. An executor SHALL retain exactly one active reservation across all project scopes and connections of its machine role. Project-specific registrations SHALL not multiply capacity.
+
+#### Scenario: Cross-project assignment race
+- **GIVEN** one executor available to two projects and concurrent majority-backed assignments
+- **WHEN** both projects reserve that machine
+- **THEN** one assignment succeeds globally and the other waits for capacity, including while the first awaits council answers.

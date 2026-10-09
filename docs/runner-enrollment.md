@@ -87,8 +87,7 @@ startup CLI wiring remain pending; these tests do not claim a deployed CLI login
 
 ## Private machine state (Linux and macOS)
 
-OpenState requires an absolute owner-private directory, fixes its server/project/
-role binding and holds an exclusive flock for the lifetime of the runner. A
+OpenState requires an absolute owner-private directory, fixes its server/role binding and holds an exclusive flock for the lifetime of the runner. A
 second process cannot open the same state, while architect/executor directories
 on one host remain independent. The Ed25519 seed is durable across restarts.
 Files require mode 0600, the directory must exclude group/other access, and
@@ -96,7 +95,7 @@ owner identity is checked. Directory-descriptor-relative operations and
 O_NOFOLLOW prevent reading or writing through state-file symlinks.
 
 Credential updates use an owner-private temporary file, fsync, atomic rename
-and directory fsync. Saved leases bind project/role and may be loaded after
+and directory fsync. Separate per-project lease files bind project/role and may be loaded after
 credential expiry for key-proved refresh; loading an expired lease does not
 make it valid for gRPC authentication. The state object does not expose secrets
 through JSON marshaling. Startup must additionally keep state outside managed
@@ -117,3 +116,14 @@ Use absolute configuration, state and repository mappings. The agent's working
 directory is the assigned task worktree, while private state remains outside
 project source. Changing shell working directory must not switch identity or
 select a different checkout implicitly.
+
+## Multi-project identity correction
+
+The machine key/process lock is shared for one role across its eligible
+configured projects. OpenState no longer accepts or fixes a project. SaveLease
+and LoadLease(projectID) use independent scoped files, so credentials cannot
+replace another project's lease. Version-1 project-bound profiles migrate to
+version 2 while preserving the key and any saved credential under its project
+scope. Human intent/contract chooses the target repository; allocation still
+must enforce one active executor task globally across all project connections.
+That allocator gate is not implemented by the journal alone.
