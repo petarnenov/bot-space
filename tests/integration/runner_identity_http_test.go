@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -31,7 +32,10 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	defer server.Close()
 	browser := &identity.Web{Config: config.Identity{Enabled: true, ClientID: "mock-client-id", ClientSecret: "mock-client-secret", BaseURL: "http://" + server.Listener.Addr().String()}, Sessions: &identity.Sessions{Pool: pool}, Workspaces: teamsStore, Provider: identity.Provider{AuthorizeURL: provider.URL + "/authorize", TokenURL: provider.URL + "/token", UserURL: provider.URL + "/user", Client: identity.GitHubProvider().Client}}
 	browser.Register(mux)
-	(&runneridentity.Web{Store: store, Browser: browser, ControlEndpoint: "native.example:9090", ControlCA: "test-public-ca"}).Register(mux)
+	certificateSource := httptest.NewTLSServer(http.NotFoundHandler())
+	publicCA := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateSource.TLS.Certificates[0].Certificate[0]}))
+	certificateSource.Close()
+	(&runneridentity.Web{Store: store, Browser: browser, ControlEndpoint: "native.example:9090", ControlCA: publicCA}).Register(mux)
 	server.Start()
 	machine := server.Client()
 	post := func(path string, input any, origin string) *http.Response {
@@ -106,7 +110,7 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 		t.Fatal("credential rejected", response.StatusCode)
 	}
 	response.Body.Close()
-	if result.Endpoint != "native.example:9090" || result.CA != "test-public-ca" {
+	if result.Endpoint != "native.example:9090" || result.CA != publicCA {
 		t.Fatal("control trust not delivered")
 	}
 	if _, err = store.Authenticate(ctx, result.Token); err != nil {
@@ -126,4 +130,35 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 		t.Fatal("browser origin accepted", response.StatusCode)
 	}
 	response.Body.Close()
+	api, err := runneridentity.NewClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, architectKey, _ := ed25519.GenerateKey(rand.Reader)
+	opened := false
+	lease, err := api.Enroll(ctx, project, runneridentity.Architect, architectKey, func(loginURL string) error {
+		opened = true
+		result, err := human.Get(loginURL)
+		if err != nil {
+			return err
+		}
+		defer result.Body.Close()
+		if result.StatusCode != 200 {
+			return runneridentity.ErrUnavailable
+		}
+		return nil
+	})
+	if err != nil || !opened || lease.Role != runneridentity.Architect {
+		t.Fatal("startup client failed", err)
+	}
+	renewed, err := api.Refresh(ctx, lease, architectKey)
+	if err != nil || renewed.Epoch != lease.Epoch+1 {
+		t.Fatal("startup client refresh failed", err)
+	}
+	if _, err = store.Authenticate(ctx, lease.Token); err == nil {
+		t.Fatal("client retained stale credential epoch")
+	}
+	if _, err = store.Authenticate(ctx, renewed.Token); err != nil {
+		t.Fatal(err)
+	}
 }

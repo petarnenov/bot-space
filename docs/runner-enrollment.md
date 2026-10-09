@@ -69,3 +69,18 @@ control endpoint and public CA, preserving TLS hostname/chain validation.
 Real-PG/fake-provider HTTP tests prove a collaborator without mailbox membership
 can enroll, while replay and cross-origin requests are denied. Production wiring
 and real runner startup remain unfinished; task 3.2 is not complete.
+
+## Startup client library
+
+Runneridentity.NewClient accepts HTTPS origins or explicit loopback HTTP for
+local testing. Enroll signs the project/role request, validates the returned
+same-server login URL, invokes the caller's browser opener and polls bounded
+machine challenges until GitHub authorization succeeds. The machine HTTP client
+has no browser cookie jar and never follows redirects. Credential/trust metadata
+is checked before returning a lease. Refresh proves the same key and requires a
+new credential epoch for the same runner/project/role.
+
+Real PostgreSQL/mock-GitHub integration verifies this client enrolls an architect
+and refreshes its credential. Unit tests reject unsafe origins, external login
+URLs and machine API redirects. The private key/credential journal and production
+startup CLI wiring remain pending; these tests do not claim a deployed CLI login.
