@@ -224,3 +224,17 @@ contained only runner/project/role/epoch; bearer and machine key stayed private.
 Task/presence operations remain closed with FailedPrecondition until the durable
 work backend is installed. Automatic `serve` runtime is still pending, so
 OpenSpec task 3.2 is not checked off yet.
+
+## Identity lifecycle owner
+
+Lifecycle acquires configured scopes at startup and refreshes three minutes
+before credential expiry. Refresh/new-connection notification succeeds before
+a scope is locally usable. Any failed refresh invalidates that scope immediately
+because a lost response could already have rotated the server token. Other
+project scopes remain independently valid. Key-proved retry uses bounded
+backoff, and a restored scope requires a newer epoch for the same runner/role.
+These authentication bounds never create an execution deadline.
+
+The supervisor must replace native connections on OnLease and fence affected
+work on OnLoss; durable replay/execution reconciliation remain separate tracked
+runtime gates. Tests verify scope isolation, invalidation, backoff and recovery.
