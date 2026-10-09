@@ -204,6 +204,12 @@ func (s *Store) openDecision(ctx context.Context, token, contract, kind, subject
 	if err != nil {
 		return Record{}, err
 	}
+	if kind == "answer" {
+		material.EvidenceDigest, err = questionSource(ctx, tx, p.ProjectID, contract, subject)
+		if err != nil {
+			return Record{}, err
+		}
+	}
 	if err = actor(ctx, tx, p, token); err != nil {
 		return Record{}, err
 	}

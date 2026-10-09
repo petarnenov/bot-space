@@ -519,6 +519,66 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_attempts SET session_id='rewritten' WHERE id=$1`, workAttempt.ID); err == nil {
 		t.Fatal("database session replacement allowed")
 	}
+	questionInput := workallocation.QuestionContext{Question: "Which locking strategy should I use?", Branch: "openspec/feature", Commit: strings.Repeat("a", 40), Tried: []string{"Inspected allocation invariants"}, Checks: []string{"Current tests pass"}, Diff: "No changes yet"}
+	question, err := allocator.Ask(ctx, executorToken, accepted.assignment.ID, bound.Session, "question-1", workAttempt.AuthorityEpoch, questionInput)
+	if err != nil || question.Attempt != workAttempt.ID || question.Session != bound.Session {
+		t.Fatal("exact-session question failed", err)
+	}
+	duplicate, err := allocator.Ask(ctx, executorToken, accepted.assignment.ID, bound.Session, "another-label", workAttempt.AuthorityEpoch, questionInput)
+	if err != nil || duplicate.ID != question.ID {
+		t.Fatal("request label reset question identity", err)
+	}
+	changedQuestion := questionInput
+	changedQuestion.Question = "A different question"
+	if _, err = allocator.Ask(ctx, executorToken, accepted.assignment.ID, bound.Session, "another-label", workAttempt.AuthorityEpoch, changedQuestion); !errors.Is(err, workallocation.ErrQuestionConflict) {
+		t.Fatal("question alias payload changed", err)
+	}
+	if _, err = allocator.Ask(ctx, executorToken, accepted.assignment.ID, "wrong-session", "wrong", workAttempt.AuthorityEpoch, questionInput); !errors.Is(err, workallocation.ErrInvalid) {
+		t.Fatal("wrong session asked a question", err)
+	}
+	answerProposal := council.Proposal{Actions: []council.Action{{Kind: "answer", Target: question.ID, Value: "Keep the exact task session and serialize the machine slot."}}}
+	answerDecision, err := restarted.OpenAnswer(ctx, accepted.token, question.ID, answerProposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = allocator.AcceptAnswer(ctx, executorToken, accepted.assignment.ID, question.ID, answerDecision.Snapshot.ID, bound.Session, workAttempt.AuthorityEpoch); !errors.Is(err, councilstore.ErrStale) {
+		t.Fatal("answer resumed without majority", err)
+	}
+	answerTokens := tokens[:3]
+	if accepted.assignment.Project == foreignProject {
+		answerTokens = []string{foreignArchToken}
+	}
+	for _, token := range answerTokens {
+		answerDecision, err = restarted.Vote(ctx, token, answerDecision.Snapshot.ID, 1, answerDecision.Snapshot.Rounds[0].Hash, council.Approve)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	response, err := allocator.AcceptAnswer(ctx, executorToken, accepted.assignment.ID, question.ID, answerDecision.Snapshot.ID, bound.Session, workAttempt.AuthorityEpoch)
+	if err != nil || response.Session != bound.Session || response.Text != answerProposal.Actions[0].Value {
+		t.Fatal("majority answer lost exact continuation", err)
+	}
+	repeatedResponse, err := allocator.AcceptAnswer(ctx, executorToken, accepted.assignment.ID, question.ID, answerDecision.Snapshot.ID, bound.Session, workAttempt.AuthorityEpoch)
+	if err != nil || repeatedResponse.Text != response.Text {
+		t.Fatal("answer retry changed history", err)
+	}
+	delayedQuestion, err := allocator.Ask(ctx, executorToken, accepted.assignment.ID, bound.Session, "question-1", workAttempt.AuthorityEpoch, questionInput)
+	if err != nil || delayedQuestion.ID != question.ID || !delayedQuestion.Answered {
+		t.Fatal("delayed question retry re-entered wait", err)
+	}
+	currentAttempt, err := allocator.Begin(ctx, executorToken, accepted.assignment.ID, client)
+	if err != nil || currentAttempt.State != "running" || currentAttempt.Session != bound.Session {
+		t.Fatal("answered question lost continuation state", err)
+	}
+	if _, err = allocator.AcceptAnswer(ctx, executorToken, accepted.assignment.ID, question.ID, answerDecision.Snapshot.ID, "wrong-session", workAttempt.AuthorityEpoch); !errors.Is(err, workallocation.ErrInvalid) {
+		t.Fatal("old answer changed native session", err)
+	}
+	if _, err = pool.Exec(ctx, `DELETE FROM mailbox.executor_questions WHERE id=$1`, question.ID); err == nil {
+		t.Fatal("question context deleted")
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.executor_question_answers SET answer='rewritten' WHERE question_id=$1`, question.ID); err == nil {
+		t.Fatal("answer history rewritten")
+	}
 	if _, err = pool.Exec(ctx, `UPDATE mailbox.work_assignments SET created_at=clock_timestamp()-interval '2 days' WHERE id=$1`, accepted.assignment.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -28,6 +28,13 @@ func (s *Store) ReconsiderAllocation(ctx context.Context, token, contract, task 
 }
 
 func (s *Store) proposal(ctx context.Context, tx pgx.Tx, p authenticated, contract, kind, subject string, proposal council.Proposal) error {
+	if kind == "answer" {
+		if !answerProposal(proposal, subject) {
+			return council.ErrInvalid
+		}
+		_, err := questionSource(ctx, tx, p.ProjectID, contract, subject)
+		return err
+	}
 	if kind == "plan" {
 		if subject != "root" || !planProposal(proposal, contract) {
 			return council.ErrInvalid
@@ -111,6 +118,15 @@ func LockAccepted(ctx context.Context, tx pgx.Tx, project, id, kind, subject, di
 	_, material, err := source(ctx, tx, project, r.Contract)
 	if err != nil || material.RootRevision != r.Material.RootRevision || material.SpecDigest != r.Material.SpecDigest {
 		return Record{}, ErrStale
+	}
+	if kind == "answer" {
+		fingerprint, e := questionSource(ctx, tx, project, r.Contract, subject)
+		if e != nil {
+			return Record{}, e
+		}
+		if fingerprint != r.Material.EvidenceDigest {
+			return Record{}, ErrStale
+		}
 	}
 	if kind == "allocation" {
 		var planID string

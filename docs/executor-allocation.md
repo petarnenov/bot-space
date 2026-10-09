@@ -63,3 +63,33 @@ that the database gate imposes no legacy execution-age cap. This is not a claim
 of actual two-day native provider execution. Native adapters, local persistence,
 lease-loss observation, majority-backed retry/reconciliation and session-bound
 questions/results still need integration before tasks 6.1–6.3 are complete.
+
+## Durable questions and majority answers
+
+Migrations 0015–0016 retain immutable question context, request aliases and
+accepted answers. `Ask` authenticates the assigned executor, exact current
+attempt/session/authority epoch, current plan/spec/root and occupied slot. It
+stores a bounded question, expected OpenSpec branch, commit reference, attempted
+approaches, checks and diff; known runner credentials are scrubbed. Branch/SHA
+shape is checked here; remote Git/check verification belongs to integration.
+
+Request labels map to a context fingerprint within the attempt. Identical input
+with a new label returns the existing question instead of opening a fresh council
+identity. Reusing a label with changed input conflicts. Question and assignment
+enter question wait atomically, retaining the same session and machine slot.
+
+`councilstore.OpenAnswer` binds its fixed council and proposal to that exact
+question and immutable context fingerprint. The answer action targets the question
+ID. Strict-majority commits use the same three-round/no-deliberation-time-limit
+engine. `AcceptAnswer` requires that majority, current task/spec/root authority,
+the same live attempt/session and exact question. It records one immutable answer
+and restores running state after all pending questions are answered. Duplicate
+delivery returns the saved answer. A delayed duplicate Ask returns `Answered`
+without sending an already-resumed task back into wait.
+
+Real-PG tests verify saved-session questions, label deduplication/conflicts,
+unsupported-majority rejection, exact-session answer acceptance, repeated answers,
+delayed question retries and immutable question/answer history. This is server
+state-machine evidence using provider-session fixtures; native provider resume,
+outbox delivery/ACK, branch/check verification and actual client context retention
+remain pending. Tasks 5.1 and 6.3 stay open until the full workflow is integrated.
