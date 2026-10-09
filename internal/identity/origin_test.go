@@ -29,4 +29,25 @@ func TestSameOriginAcceptsMissingBrowserMetadata(t *testing.T) {
 	if web.sameOrigin(request) {
 		t.Fatal("Fetch Metadata overrode a foreign Origin")
 	}
+
+	for _, tc := range []struct {
+		name   string
+		origin []string
+		want   originRejection
+	}{
+		{"opaque", []string{"null"}, originOpaque},
+		{"foreign", []string{"https://evil.example"}, originForeign},
+		{"duplicate", []string{"https://app.example", "https://app.example"}, originMultiple},
+		{"malformed", []string{"https://user@app.example"}, originMalformed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "https://app.example/objectives", nil)
+			for _, value := range tc.origin {
+				req.Header.Add("Origin", value)
+			}
+			if got := web.originRejection(req); got != tc.want {
+				t.Fatalf("origin rejection = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }

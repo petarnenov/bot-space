@@ -88,15 +88,18 @@ func (w *Web) Protect(mutation bool, next func(http.ResponseWriter, *http.Reques
 			return
 		}
 		if mutation {
-			if !w.sameOrigin(r) {
+			if reason := w.originRejection(r); reason != "" {
+				rw.Header().Set("X-Request-Rejection", string(reason))
 				http.Error(rw, "This request did not come from the application. Reload the page and try again.", http.StatusForbidden)
 				return
 			}
 			if r.ParseForm() != nil {
+				rw.Header().Set("X-Request-Rejection", "malformed-form")
 				http.Error(rw, "This form could not be read. Reload the page and try again.", http.StatusBadRequest)
 				return
 			}
 			if !security.Equal(r.PostForm.Get("csrf_token"), session.CSRF) {
+				rw.Header().Set("X-Request-Rejection", "csrf-invalid")
 				http.Error(rw, "This form expired. Reload the page and try again.", http.StatusForbidden)
 				return
 			}
@@ -106,18 +109,54 @@ func (w *Web) Protect(mutation bool, next func(http.ResponseWriter, *http.Reques
 }
 
 func (w *Web) sameOrigin(r *http.Request) bool {
+	return w.originRejection(r) == ""
+}
+
+type originRejection string
+
+const (
+	originForeign   originRejection = "origin-mismatch"
+	originOpaque    originRejection = "origin-opaque"
+	originMalformed originRejection = "origin-malformed"
+	originMultiple  originRejection = "origin-multiple"
+	originFetchSite originRejection = "fetch-site-rejected"
+)
+
+func (w *Web) originRejection(r *http.Request) originRejection {
 	if origins := r.Header.Values("Origin"); len(origins) > 0 {
-		return len(origins) == 1 && origins[0] == w.Config.BaseURL
+		if len(origins) != 1 {
+			return originMultiple
+		}
+		if origins[0] == "null" {
+			return originOpaque
+		}
+		parsed, err := url.Parse(origins[0])
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return originMalformed
+		}
+		if origins[0] != w.Config.BaseURL {
+			return originForeign
+		}
+		return ""
 	}
 	if referer := r.Referer(); referer != "" {
 		u, err := url.Parse(referer)
-		return err == nil && u.Scheme != "" && u.User == nil && u.Scheme+"://"+u.Host == w.Config.BaseURL
+		if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil {
+			return originMalformed
+		}
+		if u.Scheme+"://"+u.Host != w.Config.BaseURL {
+			return originForeign
+		}
+		return ""
 	}
 	// Referrer-Policy intentionally suppresses Referer, and some browsers or
 	// proxies omit Fetch Metadata. In that case the session-bound CSRF token is
 	// the mutation proof. Explicit cross-site metadata is still rejected.
 	site := r.Header.Get("Sec-Fetch-Site")
-	return site == "" || site == "same-origin"
+	if site == "" || site == "same-origin" {
+		return ""
+	}
+	return originFetchSite
 }
 
 func (w *Web) login(rw http.ResponseWriter, r *http.Request) {

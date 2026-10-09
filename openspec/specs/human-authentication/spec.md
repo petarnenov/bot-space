@@ -76,6 +76,14 @@ Logout SHALL require POST, an authenticated session, and a session-bound CSRF to
 - **WHEN** Fetch Metadata is absent, contradictory, or claims same-origin
 - **THEN** the mutation is rejected without changing state.
 
+### Requirement: Safe browser mutation rejection diagnostics
+Browser mutation rejections SHALL return a bounded reason code distinguishing origin mismatch, opaque origin, malformed or multiple origins, Fetch Metadata rejection, malformed form and CSRF failure. The code SHALL NOT expose cookies, tokens, request bodies, raw Referer URLs or user-supplied header values. Public error bodies SHALL remain sanitized.
+
+#### Scenario: Diagnose rejected browser mutations
+- **GIVEN** a browser mutation rejected by an origin, form parsing or CSRF check
+- **WHEN** an operator inspects its response diagnostics
+- **THEN** a fixed reason code identifies the rejecting gate without revealing session credentials, request headers or form contents.
+
 ### Requirement: Configuration and safe redirects
 Complete `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `PUBLIC_BASE_URL` SHALL enable identity routes. Partial/invalid configuration SHALL fail startup without exposing values. HTTPS SHALL be required except for loopback development. Return paths SHALL be local paths without schemes, hosts, or protocol-relative redirects. With all identity settings absent, operations-only serving SHALL expose no login or membership routes.
 

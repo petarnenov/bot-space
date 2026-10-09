@@ -62,6 +62,9 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if response.StatusCode != 403 {
 		t.Fatal("invalid CSRF admitted")
 	}
+	if response.Header.Get("X-Request-Rejection") != "csrf-invalid" {
+		t.Fatal("invalid CSRF rejection category missing", response.Header.Get("X-Request-Rejection"))
+	}
 	raw, _ := io.ReadAll(response.Body)
 	if !strings.Contains(string(raw), "This form expired") {
 		t.Fatal("invalid CSRF returned the wrong error", string(raw))
@@ -80,17 +83,78 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if response.StatusCode != http.StatusForbidden {
 		t.Fatal("foreign Origin overrode by Fetch Metadata", response.StatusCode)
 	}
+	if response.Header.Get("X-Request-Rejection") != "origin-mismatch" {
+		t.Fatal("foreign Origin rejection category missing", response.Header.Get("X-Request-Rejection"))
+	}
 	raw, _ = io.ReadAll(response.Body)
 	if !strings.Contains(string(raw), "did not come from the application") {
 		t.Fatal("invalid origin returned the wrong error", string(raw))
 	}
 	response.Body.Close()
+	for _, origin := range []string{"null", "https://user@evil.example", "https://evil.example"} {
+		request, _ = http.NewRequest("POST", server.URL+intakePath, strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Add("Origin", origin)
+		if origin == "https://evil.example" {
+			request.Header.Add("Origin", "https://evil.example")
+		}
+		request.AddCookie(&http.Cookie{Name: browser.CookieName(), Value: secret})
+		response, err = (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		category := "origin-opaque"
+		if origin == "https://user@evil.example" {
+			category = "origin-malformed"
+		}
+		if origin == "https://evil.example" {
+			category = "origin-multiple"
+		}
+		if response.StatusCode != 403 || response.Header.Get("X-Request-Rejection") != category {
+			t.Fatal("invalid Origin not classified safely", origin, response.StatusCode, response.Header.Get("X-Request-Rejection"))
+		}
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if strings.Contains(string(body), origin) || strings.Contains(string(body), session.CSRF) || strings.Contains(string(body), form.Get("description")) {
+			t.Fatal("origin rejection leaked request data")
+		}
+	}
 	response = call("POST", intakePath, form, true)
 	if response.StatusCode != 303 {
-		t.Fatal("human input rejected", response.StatusCode)
+		t.Fatal("human input rejected", response.StatusCode, response.Header.Get("X-Request-Rejection"))
 	}
 	location := response.Header.Get("Location")
 	response.Body.Close()
+	var intentions, revisions, createdEvents int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.human_intentions WHERE project_id=$1`, project).Scan(&intentions); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.human_intention_revisions WHERE project_id=$1`, project).Scan(&revisions); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.audit_events WHERE workspace_id=$1 AND action='intention.created'`, w.ID).Scan(&createdEvents); err != nil {
+		t.Fatal(err)
+	}
+	if intentions != 1 || revisions != 1 || createdEvents != 1 {
+		t.Fatalf("created objective records = intentions:%d revisions:%d audits:%d, want one each", intentions, revisions, createdEvents)
+	}
+	response = call("POST", intakePath, form, true)
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatal("idempotent retry failed", response.StatusCode)
+	}
+	response.Body.Close()
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.human_intentions WHERE project_id=$1`, project).Scan(&intentions); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.human_intention_revisions WHERE project_id=$1`, project).Scan(&revisions); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.audit_events WHERE workspace_id=$1 AND action='intention.created'`, w.ID).Scan(&createdEvents); err != nil {
+		t.Fatal(err)
+	}
+	if intentions != 1 || revisions != 1 || createdEvents != 1 {
+		t.Fatalf("idempotent retry duplicated objective records = intentions:%d revisions:%d audits:%d", intentions, revisions, createdEvents)
+	}
 	response = call("GET", location, nil, true)
 	raw, _ = io.ReadAll(response.Body)
 	response.Body.Close()
@@ -100,7 +164,7 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	response = call("GET", dashboardPath, nil, true)
 	raw, _ = io.ReadAll(response.Body)
 	response.Body.Close()
-	if response.StatusCode != 200 || !strings.Contains(string(raw), "Submit objective") || !strings.Contains(string(raw), "objective-description") || !strings.Contains(string(raw), "&lt;script&gt;") {
+	if response.StatusCode != 200 || response.Header.Get("Referrer-Policy") != "no-referrer" || !strings.Contains(string(raw), "Submit objective") || !strings.Contains(string(raw), "objective-description") || !strings.Contains(string(raw), "&lt;script&gt;") {
 		t.Fatal("backlog view missing")
 	}
 	if !strings.Contains(string(raw), `<select id="project-switch" name="project">`) || !strings.Contains(string(raw), `value="`+project+`" selected`) || !strings.Contains(string(raw), `value="`+secondProject+`"`) || !strings.Contains(string(raw), "owner/second") {
