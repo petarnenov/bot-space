@@ -85,3 +85,50 @@ func TestHumanBacklogDurableIdempotencyAndAuthentication(t *testing.T) {
 		t.Fatal("duplicate or missing audit", err)
 	}
 }
+
+func TestHumanBacklogConcurrentKeysAndProjectIsolation(t *testing.T) {
+	ctx, pool, teamsStore, w, owner := teams(t)
+	other, err := teamsStore.Bootstrap(ctx, owner.GitHubID, "other-backlog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projects [2]string
+	for i, workspace := range []string{w.ID, other.ID} {
+		if err = pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,$2,101,'owner','project') RETURNING id::text`, workspace, 42+i).Scan(&projects[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sessions := &identity.Sessions{Pool: pool}
+	_, secret, err := sessions.Login(ctx, owner.GitHubID, owner.Username, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &backlog.Store{Pool: pool, Sessions: sessions, Authority: &backlogAuthority{true}}
+	input := backlog.Input{ProjectID: projects[0], Key: "concurrent", Title: "One goal", Description: "One authoritative goal"}
+	type result struct {
+		item backlog.Intention
+		err  error
+	}
+	results := make(chan result, 2)
+	for i := 0; i < 2; i++ {
+		go func() { item, err := store.Create(ctx, secret, input); results <- result{item, err} }()
+	}
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil || first.item.ID != second.item.ID {
+		t.Fatal("concurrent intake duplicated root", first.err, second.err)
+	}
+	if _, err = store.Get(ctx, secret, projects[1], first.item.ID, 1); err == nil {
+		t.Fatal("cross-project root read accepted")
+	}
+	page, err := store.List(ctx, secret, projects[1], first.item.ID)
+	if err != nil || len(page) != 0 {
+		t.Fatal("foreign cursor leaked another project", err)
+	}
+	if _, err = pool.Exec(ctx, "UPDATE mailbox.human_intentions SET workspace_id=$1 WHERE id=$2", other.ID, first.item.ID); err == nil {
+		t.Fatal("cross-workspace composite reference accepted")
+	}
+	page, err = store.List(ctx, secret, projects[0], "")
+	if err != nil || len(page) != 1 || page[0].ID != first.item.ID {
+		t.Fatal("authoritative project backlog missing", err)
+	}
+}
