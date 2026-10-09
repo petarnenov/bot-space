@@ -24,8 +24,23 @@ OAuth and are retained; do not replace them with App IDs by accident.
 
 Automatic enrollment is gated by RUNNER_IDENTITY_ENABLED and also requires a
 configured project registry/native control endpoint and matching TLS material.
-Keep the flag off until those deployment gates pass. Registration/installation
-and live App verification remain pending; unit tests use an explicit fake API.
+Keep the flag off until those deployment gates pass. Registration, installation and live metadata verification are complete. Unit tests
+use an explicit fake API; production enrollment activation remains pending.
 
 See official [installation authentication](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation)
 and [JWT requirements](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app).
+
+## Verified installation (2026-10-09)
+
+App: `The Firm Bot Space`, slug `the-firm-bot-space`, App ID `5249916`,
+Client ID `Iv23liAVh5pRqpyjAQ5f`, installation ID `169580393`.
+Installed on `petarnenov/bot-space` only, with Metadata read as its sole
+repository permission and webhooks disabled. These identifiers are public;
+the private key is never committed or printed.
+
+The App variables were set privately on Railway service bot-space using stdin
+and skip-deploys. A live Go probe acquired a metadata-only installation token,
+verified immutable owner/repository IDs and received HTTP 200 from the direct
+collaborators endpoint (one current member). No token was disclosed. The probe
+source was removed after verification. RUNNER_IDENTITY_ENABLED remains disabled
+until the project registry/native authenticated service activation gates pass.

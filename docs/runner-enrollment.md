@@ -169,3 +169,10 @@ deactivation, the next frame on that same connection returns Unauthenticated
 and never reaches the fixture backend. This confirms per-frame persisted
 activation checking, not durable event storage; the fixture emits a synthetic
 receipt. Production native control wiring remains a separate unfinished gate.
+
+DialNative builds a native gRPC connection from the HTTPS-issued lease, checks
+CA/hostname through TLS and attaches the bearer only through transport-secure
+per-RPC credentials. Calls enforce 256-KiB message bounds. The real-PG open-stream
+revocation test now exercises this actual client helper. Refresh requires a new
+connection with the new epoch and retained durable cursor; the runtime replay
+loop remains pending.

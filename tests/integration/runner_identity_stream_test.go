@@ -3,7 +3,7 @@ package integration
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
+	"encoding/pem"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -58,19 +57,13 @@ func assertRunnerRevokedOnOpenTLSStream(t *testing.T, ctx context.Context, pool 
 		t.Fatal(err)
 	}
 	go rpc.Serve(listener)
-	cert, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	roots := x509.NewCertPool()
-	roots.AddCert(cert)
-	conn, err := grpc.NewClient(listener.Addr().String(), grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12})))
+	lease := runneridentity.Lease{Credential: credential, Endpoint: listener.Addr().String(), CA: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pair.Certificate[0]}))}
+	conn, client, err := runneridentity.DialNative(lease)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	authenticated := metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "Bearer "+credential.Token))
-	stream, err := pb.NewControlClient(conn).Connect(authenticated)
+	stream, err := client.Connect(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
