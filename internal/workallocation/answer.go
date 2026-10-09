@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	pb "github.com/petarnenov/bot-space/api/control/v1"
+	"github.com/petarnenov/bot-space/internal/controlevents"
 	"github.com/petarnenov/bot-space/internal/councilstore"
 	"github.com/petarnenov/bot-space/internal/security"
 )
@@ -96,6 +97,10 @@ func (s *Store) AcceptAnswer(ctx context.Context, token, id, question, decision,
 		if _, err = tx.Exec(ctx, `UPDATE mailbox.work_assignments SET state='running' WHERE project_id=$1 AND id=$2`, p.ProjectID, id); err != nil {
 			return Answer{}, ErrUnavailable
 		}
+	}
+	_, err = controlevents.PublishTx(ctx, tx, p.ProjectID, p.RunnerID, "answer:"+question, &pb.ServerFrame{Body: &pb.ServerFrame_Answer{Answer: &pb.Answer{QuestionId: question, AssignmentId: id, AttemptEpoch: uint64(epoch), ContractHash: digest, SessionId: session, Answer: out.Text, DecisionId: decision}}})
+	if err != nil {
+		return Answer{}, err
 	}
 	if tx.Commit(ctx) != nil {
 		return Answer{}, ErrUnavailable

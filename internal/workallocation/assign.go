@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	pb "github.com/petarnenov/bot-space/api/control/v1"
+	"github.com/petarnenov/bot-space/internal/controlevents"
 	"github.com/petarnenov/bot-space/internal/councilstore"
 	"github.com/petarnenov/bot-space/internal/security"
 )
@@ -129,6 +130,14 @@ func (s *Store) Assign(ctx context.Context, token, decision string) (Assignment,
 		return Assignment{}, ErrUnavailable
 	}
 	out, err := read(ctx, tx, p.ProjectID, decision)
+	if err != nil {
+		return Assignment{}, err
+	}
+	var change, base string
+	if err = tx.QueryRow(ctx, `SELECT content->>'change',content->>'base_commit' FROM mailbox.work_contracts WHERE project_id=$1 AND id=$2`, p.ProjectID, record.Contract).Scan(&change, &base); err != nil {
+		return Assignment{}, ErrUnavailable
+	}
+	_, err = controlevents.PublishTx(ctx, tx, p.ProjectID, action.Target, "assignment:"+id, &pb.ServerFrame{Body: &pb.ServerFrame_Assignment{Assignment: &pb.Assignment{AssignmentId: id, ContractHash: record.Material.SpecDigest, Repository: p.Repository.Owner + "/" + p.Repository.Name, Branch: "openspec/" + change, BaseCommit: base, OpenspecChange: change, Instruction: "Implement OpenSpec task " + task + " from " + change}}})
 	if err != nil {
 		return Assignment{}, err
 	}

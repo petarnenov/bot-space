@@ -9,6 +9,7 @@ import (
 
 	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/contracts"
+	"github.com/petarnenov/bot-space/internal/controlevents"
 	"github.com/petarnenov/bot-space/internal/council"
 	"github.com/petarnenov/bot-space/internal/councilstore"
 	"github.com/petarnenov/bot-space/internal/identity"
@@ -561,6 +562,10 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	repeatedResponse, err := allocator.AcceptAnswer(ctx, executorToken, accepted.assignment.ID, question.ID, answerDecision.Snapshot.ID, bound.Session, workAttempt.AuthorityEpoch)
 	if err != nil || repeatedResponse.Text != response.Text {
 		t.Fatal("answer retry changed history", err)
+	}
+	delivered, err := (&controlevents.Store{Pool: pool, Identities: identities}).Page(ctx, executorToken)
+	if err != nil || len(delivered) != 2 || delivered[0].Frame.GetAssignment().GetAssignmentId() != accepted.assignment.ID || delivered[1].Frame.GetAnswer().GetSessionId() != bound.Session {
+		t.Fatal("atomic assignment/answer events missing", err)
 	}
 	delayedQuestion, err := allocator.Ask(ctx, executorToken, accepted.assignment.ID, bound.Session, "question-1", workAttempt.AuthorityEpoch, questionInput)
 	if err != nil || delayedQuestion.ID != question.ID || !delayedQuestion.Answered {
