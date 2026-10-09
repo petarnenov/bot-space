@@ -261,6 +261,10 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 		t.Fatal("removed collaborator voted", err)
 	}
 	authority.allowed[101] = true
+	architectEvents, err := (&controlevents.Store{Pool: pool, Identities: identities}).Page(ctx, tokens[0])
+	if err != nil || len(architectEvents) == 0 || architectEvents[0].Frame.GetCouncil() == nil {
+		t.Fatal("council changes were not delivered", err)
+	}
 	var raw []byte
 	if err = pool.QueryRow(ctx, `SELECT snapshot FROM mailbox.council_decisions WHERE id=$1`, id).Scan(&raw); err != nil {
 		t.Fatal(err)
@@ -635,6 +639,10 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	}
 	if _, err = queue.Control(ctx, human, project, exhaustedRoot.ID, "pause", 1); err != nil {
 		t.Fatal(err)
+	}
+	var stops int
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM mailbox.control_outbox WHERE project_id=$1 AND event_key=$2`, project, "root:"+exhaustedRoot.ID+":2").Scan(&stops); err != nil || stops < 1 {
+		t.Fatal("root pause did not publish stop events", err)
 	}
 	gate(allocation.Snapshot.ID, "allocation", "task:1.1", revisedContract.Hash, false)
 	forged, err := council.Restore(otherAllocation.Snapshot, otherAllocation.Material)

@@ -1396,6 +1396,74 @@ func (x *Receipt) GetRequestId() string {
 	return ""
 }
 
+type RootControl struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	RootId         string                 `protobuf:"bytes,1,opt,name=root_id,json=rootId,proto3" json:"root_id,omitempty"`
+	LifecycleEpoch uint64                 `protobuf:"varint,2,opt,name=lifecycle_epoch,json=lifecycleEpoch,proto3" json:"lifecycle_epoch,omitempty"`
+	Action         string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
+	State          string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RootControl) Reset() {
+	*x = RootControl{}
+	mi := &file_api_control_v1_control_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RootControl) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RootControl) ProtoMessage() {}
+
+func (x *RootControl) ProtoReflect() protoreflect.Message {
+	mi := &file_api_control_v1_control_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RootControl.ProtoReflect.Descriptor instead.
+func (*RootControl) Descriptor() ([]byte, []int) {
+	return file_api_control_v1_control_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RootControl) GetRootId() string {
+	if x != nil {
+		return x.RootId
+	}
+	return ""
+}
+
+func (x *RootControl) GetLifecycleEpoch() uint64 {
+	if x != nil {
+		return x.LifecycleEpoch
+	}
+	return 0
+}
+
+func (x *RootControl) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *RootControl) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 type ServerFrame struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	EventId string                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
@@ -1406,6 +1474,7 @@ type ServerFrame struct {
 	//	*ServerFrame_Council
 	//	*ServerFrame_Answer
 	//	*ServerFrame_Receipt
+	//	*ServerFrame_RootControl
 	Body          isServerFrame_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1413,7 +1482,7 @@ type ServerFrame struct {
 
 func (x *ServerFrame) Reset() {
 	*x = ServerFrame{}
-	mi := &file_api_control_v1_control_proto_msgTypes[17]
+	mi := &file_api_control_v1_control_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1425,7 +1494,7 @@ func (x *ServerFrame) String() string {
 func (*ServerFrame) ProtoMessage() {}
 
 func (x *ServerFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_api_control_v1_control_proto_msgTypes[17]
+	mi := &file_api_control_v1_control_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1438,7 +1507,7 @@ func (x *ServerFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerFrame.ProtoReflect.Descriptor instead.
 func (*ServerFrame) Descriptor() ([]byte, []int) {
-	return file_api_control_v1_control_proto_rawDescGZIP(), []int{17}
+	return file_api_control_v1_control_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ServerFrame) GetEventId() string {
@@ -1498,6 +1567,15 @@ func (x *ServerFrame) GetReceipt() *Receipt {
 	return nil
 }
 
+func (x *ServerFrame) GetRootControl() *RootControl {
+	if x != nil {
+		if x, ok := x.Body.(*ServerFrame_RootControl); ok {
+			return x.RootControl
+		}
+	}
+	return nil
+}
+
 type isServerFrame_Body interface {
 	isServerFrame_Body()
 }
@@ -1518,6 +1596,10 @@ type ServerFrame_Receipt struct {
 	Receipt *Receipt `protobuf:"bytes,6,opt,name=receipt,proto3,oneof"`
 }
 
+type ServerFrame_RootControl struct {
+	RootControl *RootControl `protobuf:"bytes,7,opt,name=root_control,json=rootControl,proto3,oneof"`
+}
+
 func (*ServerFrame_Assignment) isServerFrame_Body() {}
 
 func (*ServerFrame_Council) isServerFrame_Body() {}
@@ -1525,6 +1607,8 @@ func (*ServerFrame_Council) isServerFrame_Body() {}
 func (*ServerFrame_Answer) isServerFrame_Body() {}
 
 func (*ServerFrame_Receipt) isServerFrame_Body() {}
+
+func (*ServerFrame_RootControl) isServerFrame_Body() {}
 
 var File_api_control_v1_control_proto protoreflect.FileDescriptor
 
@@ -1639,7 +1723,12 @@ const file_api_control_v1_control_proto_rawDesc = "" +
 	"decisionId\"(\n" +
 	"\aReceipt\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\"\xbb\x02\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"}\n" +
+	"\vRootControl\x12\x17\n" +
+	"\aroot_id\x18\x01 \x01(\tR\x06rootId\x12'\n" +
+	"\x0flifecycle_epoch\x18\x02 \x01(\x04R\x0elifecycleEpoch\x12\x16\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\"\x82\x03\n" +
 	"\vServerFrame\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\x04R\x06cursor\x12A\n" +
@@ -1648,7 +1737,8 @@ const file_api_control_v1_control_proto_rawDesc = "" +
 	"assignment\x12=\n" +
 	"\acouncil\x18\x04 \x01(\v2!.botspace.control.v1.CouncilEventH\x00R\acouncil\x125\n" +
 	"\x06answer\x18\x05 \x01(\v2\x1b.botspace.control.v1.AnswerH\x00R\x06answer\x128\n" +
-	"\areceipt\x18\x06 \x01(\v2\x1c.botspace.control.v1.ReceiptH\x00R\areceiptB\x06\n" +
+	"\areceipt\x18\x06 \x01(\v2\x1c.botspace.control.v1.ReceiptH\x00R\areceipt\x12E\n" +
+	"\froot_control\x18\a \x01(\v2 .botspace.control.v1.RootControlH\x00R\vrootControlB\x06\n" +
 	"\x04body*C\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\x12\n" +
@@ -1677,7 +1767,7 @@ func file_api_control_v1_control_proto_rawDescGZIP() []byte {
 }
 
 var file_api_control_v1_control_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_control_v1_control_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_api_control_v1_control_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_api_control_v1_control_proto_goTypes = []any{
 	(Role)(0),                // 0: botspace.control.v1.Role
 	(Availability)(0),        // 1: botspace.control.v1.Availability
@@ -1698,7 +1788,8 @@ var file_api_control_v1_control_proto_goTypes = []any{
 	(*CouncilEvent)(nil),     // 16: botspace.control.v1.CouncilEvent
 	(*Answer)(nil),           // 17: botspace.control.v1.Answer
 	(*Receipt)(nil),          // 18: botspace.control.v1.Receipt
-	(*ServerFrame)(nil),      // 19: botspace.control.v1.ServerFrame
+	(*RootControl)(nil),      // 19: botspace.control.v1.RootControl
+	(*ServerFrame)(nil),      // 20: botspace.control.v1.ServerFrame
 }
 var file_api_control_v1_control_proto_depIdxs = []int32{
 	2,  // 0: botspace.control.v1.PresenceRequest.provider:type_name -> botspace.control.v1.ProviderSettings
@@ -1715,17 +1806,18 @@ var file_api_control_v1_control_proto_depIdxs = []int32{
 	16, // 11: botspace.control.v1.ServerFrame.council:type_name -> botspace.control.v1.CouncilEvent
 	17, // 12: botspace.control.v1.ServerFrame.answer:type_name -> botspace.control.v1.Answer
 	18, // 13: botspace.control.v1.ServerFrame.receipt:type_name -> botspace.control.v1.Receipt
-	3,  // 14: botspace.control.v1.Control.Presence:input_type -> botspace.control.v1.PresenceRequest
-	5,  // 15: botspace.control.v1.Control.Inspect:input_type -> botspace.control.v1.InspectRequest
-	14, // 16: botspace.control.v1.Control.Connect:input_type -> botspace.control.v1.RunnerFrame
-	4,  // 17: botspace.control.v1.Control.Presence:output_type -> botspace.control.v1.PresenceResponse
-	6,  // 18: botspace.control.v1.Control.Inspect:output_type -> botspace.control.v1.InspectResponse
-	19, // 19: botspace.control.v1.Control.Connect:output_type -> botspace.control.v1.ServerFrame
-	17, // [17:20] is the sub-list for method output_type
-	14, // [14:17] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	19, // 14: botspace.control.v1.ServerFrame.root_control:type_name -> botspace.control.v1.RootControl
+	3,  // 15: botspace.control.v1.Control.Presence:input_type -> botspace.control.v1.PresenceRequest
+	5,  // 16: botspace.control.v1.Control.Inspect:input_type -> botspace.control.v1.InspectRequest
+	14, // 17: botspace.control.v1.Control.Connect:input_type -> botspace.control.v1.RunnerFrame
+	4,  // 18: botspace.control.v1.Control.Presence:output_type -> botspace.control.v1.PresenceResponse
+	6,  // 19: botspace.control.v1.Control.Inspect:output_type -> botspace.control.v1.InspectResponse
+	20, // 20: botspace.control.v1.Control.Connect:output_type -> botspace.control.v1.ServerFrame
+	18, // [18:21] is the sub-list for method output_type
+	15, // [15:18] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_api_control_v1_control_proto_init() }
@@ -1742,11 +1834,12 @@ func file_api_control_v1_control_proto_init() {
 		(*RunnerFrame_Progress)(nil),
 		(*RunnerFrame_Result)(nil),
 	}
-	file_api_control_v1_control_proto_msgTypes[17].OneofWrappers = []any{
+	file_api_control_v1_control_proto_msgTypes[18].OneofWrappers = []any{
 		(*ServerFrame_Assignment)(nil),
 		(*ServerFrame_Council)(nil),
 		(*ServerFrame_Answer)(nil),
 		(*ServerFrame_Receipt)(nil),
+		(*ServerFrame_RootControl)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1754,7 +1847,7 @@ func file_api_control_v1_control_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_control_v1_control_proto_rawDesc), len(file_api_control_v1_control_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

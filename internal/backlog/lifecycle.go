@@ -4,7 +4,10 @@ import (
 	"context"
 	"time"
 
+	"fmt"
 	"github.com/jackc/pgx/v5"
+	pb "github.com/petarnenov/bot-space/api/control/v1"
+	"github.com/petarnenov/bot-space/internal/controlevents"
 	"github.com/petarnenov/bot-space/internal/security"
 )
 
@@ -98,6 +101,30 @@ func (s *Store) Control(ctx context.Context, secret, project, id, action string,
 	out, err := read(ctx, tx, project, id, revision)
 	if err != nil {
 		return Intention{}, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id::text FROM mailbox.project_runners WHERE project_id=$1 AND active ORDER BY id`, project)
+	if err != nil {
+		return Intention{}, ErrUnavailable
+	}
+	targets := []string{}
+	for rows.Next() {
+		var target string
+		if rows.Scan(&target) != nil {
+			rows.Close()
+			return Intention{}, ErrUnavailable
+		}
+		targets = append(targets, target)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return Intention{}, ErrUnavailable
+	}
+	for _, target := range targets {
+		_, err = controlevents.PublishTx(ctx, tx, project, target, fmt.Sprintf("root:%s:%d", id, epoch), &pb.ServerFrame{Body: &pb.ServerFrame_RootControl{RootControl: &pb.RootControl{RootId: id, LifecycleEpoch: uint64(epoch), Action: action, State: state}}})
+		if err != nil {
+			return Intention{}, ErrUnavailable
+		}
 	}
 	if tx.Commit(ctx) != nil {
 		return Intention{}, ErrUnavailable

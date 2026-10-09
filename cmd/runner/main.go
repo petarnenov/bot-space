@@ -93,7 +93,9 @@ func run(ctx context.Context, args []string, out io.Writer, open func(string) er
 		if _, err := state.ListenLocal(); err != nil {
 			return err
 		}
-		return serveIdentity(ctx, session, scopes, open, out, connectIdentity)
+		return serveIdentity(ctx, session, scopes, open, out, func(ctx context.Context, lease runneridentity.Lease) (io.Closer, error) {
+			return connectDelivery(ctx, lease, state)
+		})
 	}
 	seen := map[string]bool{}
 	for _, project := range scopes {

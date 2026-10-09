@@ -15,6 +15,7 @@ import (
 	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/contracts"
 	"github.com/petarnenov/bot-space/internal/control"
+	"github.com/petarnenov/bot-space/internal/controlevents"
 	"github.com/petarnenov/bot-space/internal/council"
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
@@ -167,6 +168,15 @@ func persist(ctx context.Context, tx pgx.Tx, r Record, d *council.Decision) erro
 			if err != nil {
 				return ErrUnavailable
 			}
+		}
+	}
+	last := snapshot.Rounds[len(snapshot.Rounds)-1]
+	proposal, _ := json.Marshal(last.Proposal)
+	frame := &pb.ServerFrame{Body: &pb.ServerFrame_Council{Council: &pb.CouncilEvent{DecisionId: snapshot.ID, Round: uint32(last.Number), ProposalHash: last.Hash, Proposal: proposal, Members: snapshot.Members, RequiredApprovals: uint32(snapshot.Required), State: string(snapshot.Status)}}}
+	key := fmt.Sprintf("council:%s:%d:%d:%s", snapshot.ID, last.Number, len(last.Votes), snapshot.Status)
+	for _, member := range snapshot.Members {
+		if _, err := controlevents.PublishTx(ctx, tx, r.Project, member, key, frame); err != nil {
+			return err
 		}
 	}
 	return nil

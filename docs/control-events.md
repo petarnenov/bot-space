@@ -31,8 +31,30 @@ and revoked access. Client tests cover private restart recovery, replay conflict
 applied-event compaction and backpressure/closed-journal failure without ACK.
 Domain tests verify assignment and exact-session answer messages commit together.
 
-Task 5.2 remains open: council/stop notifications, native backend stream wiring,
-client receive/ACK orchestration and deduplicated native execution are not fully
-integrated. These storage tests do not establish end-to-end model delivery or
-actual provider resume. The existing identity-only native backend stays closed
-to work dispatch until its operational handler is implemented.
+## Native integration and verification
+
+The mailbox service installs `orchestration.Backend` for authenticated self
+inspection, durable ACKs, architect votes and event streaming. The control
+handshake validates resume against the durable server ACK; zero requests replay
+from that position. A client cannot skip unacknowledged data. Pull tracks sent
+positions, checks activation/epoch while idle, refreshes project authorization
+periodically and force-verifies access before delivering data.
+
+Council changes now publish to fixed members; human lifecycle changes publish
+root ID/epoch/action/state to registered project runners. Assignments and answers
+retain their atomic publication. The protobuf adds a RootControl message.
+
+`runner serve` subscribes on each scoped connection. It uses zero on reconnect,
+persists before ACK, deduplicates stored replay and leaves pending messages for
+the role dispatcher. Network/credential renewal replaces connections without
+clearing the journal. A full inbox refuses ACKs and bounds memory/storage.
+Receipt alone starts no coding process. Domain handlers in later runtime tasks
+must apply durable messages idempotently and mark them applied afterward.
+
+Real gRPC/PG tests reject a skip-ahead resume, disconnect after local persistence
+before ACK, create new server/backend and local-state objects, replay the pending
+event and verify exact durable ACKs and one pending copy. Tests additionally cover
+council and root-control publication, wrong ACK UUID/order, revoked access and
+backpressure without ACK. Native provider execution/resume remains tasks 5.3,
+6 and 7; deployment remains task 10. Delivery completion does not claim those
+runtime behaviors or a production rollout of migrations 0008–0017.

@@ -39,6 +39,9 @@ type Backend interface {
 	Apply(context.Context, Principal, *pb.RunnerFrame) error
 	Pull(context.Context, Principal, uint64) (*pb.ServerFrame, error)
 }
+type ResumeValidator interface {
+	ValidateResume(context.Context, Principal, uint64) error
+}
 type Server struct {
 	pb.UnimplementedControlServer
 	Auth    Authenticate
@@ -151,6 +154,14 @@ func (s *Server) Connect(stream grpc.BidiStreamingServer[pb.RunnerFrame, pb.Serv
 	}
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
+	if validator, ok := s.Backend.(ResumeValidator); ok {
+		operation, stop := context.WithTimeout(ctx, OperationTimeout)
+		err = validator.ValidateResume(operation, initial, resume.Resume.GetCommittedCursor())
+		stop()
+		if err != nil {
+			return safeError(err)
+		}
+	}
 	done := make(chan error, 2)
 	// Exactly one receiver and sender, with no unbounded transport queue.
 	go func() {

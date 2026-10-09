@@ -14,6 +14,26 @@ import (
 )
 
 type identityConnector func(context.Context, runneridentity.Lease) (io.Closer, error)
+type deliveryConnection struct {
+	subscription *runneridentity.Subscription
+	connection   io.Closer
+}
+
+func (d *deliveryConnection) Close() error { d.subscription.Close(); return d.connection.Close() }
+func connectDelivery(ctx context.Context, lease runneridentity.Lease, state *runneridentity.State) (io.Closer, error) {
+	conn, native, err := runneridentity.DialNative(lease)
+	if err != nil {
+		return nil, err
+	}
+	check, cancel := context.WithTimeout(ctx, 5*time.Second)
+	own, err := native.Inspect(check, &pb.InspectRequest{ResourceId: lease.RunnerID})
+	cancel()
+	if err != nil || own.GetResourceId() != lease.RunnerID || own.GetState() != "enrolled" {
+		conn.Close()
+		return nil, errors.New("native identity verification failed")
+	}
+	return &deliveryConnection{subscription: runneridentity.Subscribe(ctx, state, lease.ProjectID, native), connection: conn}, nil
+}
 
 func connectIdentity(ctx context.Context, lease runneridentity.Lease) (io.Closer, error) {
 	conn, native, err := runneridentity.DialNative(lease)

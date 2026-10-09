@@ -21,12 +21,15 @@ import (
 	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/config"
 	"github.com/petarnenov/bot-space/internal/control"
+	"github.com/petarnenov/bot-space/internal/controlevents"
 	"github.com/petarnenov/bot-space/internal/controlprobe"
+	"github.com/petarnenov/bot-space/internal/councilstore"
 	"github.com/petarnenov/bot-space/internal/database"
 	"github.com/petarnenov/bot-space/internal/httpserver"
 	"github.com/petarnenov/bot-space/internal/identity"
 	"github.com/petarnenov/bot-space/internal/mailbox"
 	"github.com/petarnenov/bot-space/internal/mcpserver"
+	"github.com/petarnenov/bot-space/internal/orchestration"
 	"github.com/petarnenov/bot-space/internal/ratelimit"
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
@@ -175,7 +178,7 @@ func run(logger *slog.Logger) error {
 		if err != nil {
 			return errors.New("invalid control TLS configuration")
 		}
-		rpc, err := control.New(runnerIdentities.Authenticate, runneridentity.IdentityBackend{}, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12})))
+		rpc, err := control.New(runnerIdentities.Authenticate, &orchestration.Backend{Identities: runnerIdentities, Events: &controlevents.Store{Pool: pool, Identities: runnerIdentities}, Council: &councilstore.Store{Pool: pool, Identities: runnerIdentities}}, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12})))
 		if err != nil {
 			return err
 		}

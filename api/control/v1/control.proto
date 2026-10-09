@@ -32,8 +32,9 @@ message Assignment { string assignment_id = 1; uint64 attempt_epoch = 2; string 
 message CouncilEvent { string decision_id = 1; uint32 round = 2; string proposal_hash = 3; bytes proposal = 4; repeated string members = 5; uint32 required_approvals = 6; string state = 7; }
 message Answer { string question_id = 1; string assignment_id = 2; uint64 attempt_epoch = 3; string contract_hash = 4; string session_id = 5; string answer = 6; string decision_id = 7; }
 message Receipt { string request_id = 1; }
+message RootControl { string root_id = 1; uint64 lifecycle_epoch = 2; string action = 3; string state = 4; }
 message ServerFrame {
   string event_id = 1;
   uint64 cursor = 2;
-  oneof body { Assignment assignment = 3; CouncilEvent council = 4; Answer answer = 5; Receipt receipt = 6; }
+  oneof body { Assignment assignment = 3; CouncilEvent council = 4; Answer answer = 5; Receipt receipt = 6; RootControl root_control = 7; }
 }
