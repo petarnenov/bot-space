@@ -73,6 +73,15 @@ func TestTwoIndependentSupervisorsDelegateAndContinue(t *testing.T) {
 	t.Run("copilot_to_copilot", func(t *testing.T) {
 		testTwoIndependentSupervisorsDelegateAndContinue(t, "copilot", "copilot")
 	})
+	t.Run("codex_to_claude", func(t *testing.T) {
+		testTwoIndependentSupervisorsDelegateAndContinue(t, "codex", "claude")
+	})
+	t.Run("claude_to_copilot", func(t *testing.T) {
+		testTwoIndependentSupervisorsDelegateAndContinue(t, "claude", "copilot")
+	})
+	t.Run("copilot_to_claude", func(t *testing.T) {
+		testTwoIndependentSupervisorsDelegateAndContinue(t, "copilot", "claude")
+	})
 	t.Run("codex_to_copilot", func(t *testing.T) {
 		testTwoIndependentSupervisorsDelegateAndContinue(t, "codex", "copilot")
 	})
@@ -147,6 +156,7 @@ func testTwoIndependentSupervisorsDelegateAndContinue(t *testing.T, providerA, p
 			ID:             ownerAgent.ID,
 			TokenEnv:       "RUNNER_OWNER_TOKEN",
 			Provider:       providerA,
+			Executable:     "/bin/sh",
 			Project:        projectA,
 			AllowedSenders: []string{memberAgent.ID},
 		}},
@@ -158,6 +168,7 @@ func testTwoIndependentSupervisorsDelegateAndContinue(t *testing.T, providerA, p
 			ID:             memberAgent.ID,
 			TokenEnv:       "RUNNER_MEMBER_TOKEN",
 			Provider:       providerB,
+			Executable:     "/bin/sh",
 			Project:        projectB,
 			AllowedSenders: []string{ownerAgent.ID},
 		}},

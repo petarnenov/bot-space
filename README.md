@@ -21,7 +21,7 @@ OpenSpec 1.14.1. See [tool versions](docs/tool-versions.md).
 ```sh
 cp .env.example .env
 # Edit .env and choose POSTGRES_PASSWORD (URL-safe characters for local Compose).
-docker compose up --build -d
+make compose-up
 curl --fail http://localhost:8080/healthz
 curl --fail http://localhost:8080/readyz
 ```
@@ -45,9 +45,9 @@ run the [two-process exchange](docs/mcp.md#two-process-requestreply-example).
 Without these settings, the initial Compose start verifies health operations.
 
 ```sh
-docker compose logs app migrate
-docker compose down
-docker compose up -d
+make compose-logs
+make compose-down
+make compose-up
 ```
 
 An ordinary `down` retains the named PostgreSQL volume. **`docker compose down -v`
@@ -66,8 +66,8 @@ operations-only serving; partial settings fail startup.
 
 ```sh
 export DATABASE_URL='postgres://mailbox:YOUR_LOCAL_PASSWORD@localhost:5432/mailbox?sslmode=disable'
-go run ./cmd/mailbox migrate
-go run ./cmd/mailbox serve
+make migrate
+make serve
 ```
 
 `PORT` defaults to 8080 and `DB_MAX_CONNS` to 10. `serve` never applies migrations.
@@ -80,16 +80,10 @@ Integration tests create and remove uniquely named databases on that server.
 ```sh
 export TEST_DATABASE_URL="$DATABASE_URL"
 export PG_BACKUP_CONTAINER="$(docker compose ps -q db)"
-test -z "$(gofmt -l cmd internal migrations tests examples)"
-go mod verify
-go vet ./...
-go test -count=1 ./...
-go test -race -count=1 ./...
-go build ./...
-go -C cmd/mailbox run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -scan=module
-npm install -g @fission-ai/openspec@1.14.1
-OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive
+make verify
 ```
+
+Use `make help` for OpenSpec, test-database, and Railway wrapper targets.
 
 Without `TEST_DATABASE_URL`, real PostgreSQL integration tests explicitly skip.
 CI supplies it and runs the full checks. Source candidate GitHub Actions passed

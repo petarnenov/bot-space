@@ -35,14 +35,25 @@ func ProviderChecks(ctx context.Context, config Config) ([]ProviderCheck, error)
 			child, cancel = context.WithTimeout(ctx, 5*time.Second)
 			data, err = exec.CommandContext(child, a.Executable, "login", "status").CombinedOutput()
 			cancel()
-			if err != nil || !strings.Contains(string(data), "Logged in") {
+			if err != nil || !authenticatedOutput(string(data)) {
 				return nil, errors.New("Codex requires machine-local login or API authentication")
 			}
 			check.Authentication = "authenticated"
 		case "claude":
-			check.Authentication = "machine-local authentication required; use claude auth status"
+			child, cancel = context.WithTimeout(ctx, 5*time.Second)
+			data, err = exec.CommandContext(child, a.Executable, "auth", "status").CombinedOutput()
+			cancel()
+			if err != nil || !authenticatedOutput(string(data)) {
+				return nil, errors.New("Claude requires machine-local authentication")
+			}
+			check.Authentication = "authenticated"
 		}
 		out = append(out, check)
 	}
 	return out, nil
+}
+
+func authenticatedOutput(output string) bool {
+	text := strings.ToLower(output)
+	return strings.Contains(text, "logged in") || strings.Contains(text, "authenticated")
 }

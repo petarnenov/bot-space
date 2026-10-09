@@ -31,7 +31,7 @@ See [official Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp
 
 ## Claude Code
 
-Verified with Claude Code 2.1.292. In your client project's `.mcp.json`:
+CLI wiring was validated with Claude Code 2.1.292. In your client project's `.mcp.json`:
 
 ```json
 {
@@ -52,8 +52,9 @@ only through the environment. `mcp get` reported `Connected` against the real
 SDK HTTP handler and PostgreSQL authentication. Temporary settings were removed;
 the user's settings were untouched. No model-driven tool call was executed.
 See [official HTTP and environment expansion documentation](https://code.claude.com/docs/en/mcp).
-Runner-side Claude command execution is currently blocked by account usage limits
-(`usage_limit_reached`), so only CLI wiring validation is currently documented.
+Runner-side Claude command execution remains blocked by account usage limits
+(`usage_limit_reached`), so this section documents connectivity/wiring only, not
+completed model-execution evidence.
 
 ## Go SDK and Activation
 

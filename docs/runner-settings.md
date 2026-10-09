@@ -66,3 +66,13 @@ Observed results:
 - Codex returned `CODEx_OK`, then resumed the same `thread_id` and returned `BLUEBANANA`.
 - Copilot returned `ACK1`, then in the same `sessionId` returned `GREENAPPLE`.
 - Claude command execution is currently blocked by account usage limits (`usage_limit_reached`), so real turn execution/continuation evidence is still pending for Claude.
+
+## Claude follow-up evidence matrix
+
+Claude support remains in follow-up validation mode until real authenticated
+execution/resume evidence is captured.
+
+| Scope | Deterministic evidence | Real-model evidence |
+| --- | --- | --- |
+| Claude adapter wiring and bounded parsing | `internal/runner/provider.go`, `internal/runner/provider_runtime_test.go`, `internal/runner/doctor_test.go` | Blocked by `usage_limit_reached` for model execution. |
+| Claude-inclusive cross-provider continuity | `internal/runner/process_integration_test.go` subtests `codex_to_claude`, `claude_to_copilot`, `copilot_to_claude` | Blocked by `usage_limit_reached` for Claude turns on this account. |
