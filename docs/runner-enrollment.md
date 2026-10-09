@@ -133,3 +133,13 @@ conflicting GitHub actor in another project. Real-PG tests verify one actor can
 hold two independent project scopes while the same key cannot change actor
 between repositories. This identity invariant does not replace the pending
 machine-wide single-task reservation enforcement.
+
+## Startup session integration
+
+NewSession binds the HTTP client to an open server/role state journal. Acquire
+per project refreshes existing key-bound identity or enrolls a new scope, then
+persists the returned lease before exposing it to the supervisor. It does not
+silently replace revoked, corrupt or foreign-scoped state. Refresh also journals
+its new epoch. Real-PG/mock-GitHub HTTP tests verify enrollment, refresh and
+credential persistence together. Full production startup command wiring remains
+pending.

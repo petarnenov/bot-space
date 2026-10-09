@@ -134,9 +134,17 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, architectKey, _ := ed25519.GenerateKey(rand.Reader)
+	state, err := runneridentity.OpenState(t.TempDir(), server.URL, runneridentity.Architect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer state.Close()
+	session, err := runneridentity.NewSession(state, api)
+	if err != nil {
+		t.Fatal(err)
+	}
 	opened := false
-	lease, err := api.Enroll(ctx, project, runneridentity.Architect, architectKey, func(loginURL string) error {
+	lease, err := session.Acquire(ctx, project, func(loginURL string) error {
 		opened = true
 		result, err := human.Get(loginURL)
 		if err != nil {
@@ -151,7 +159,7 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	if err != nil || !opened || lease.Role != runneridentity.Architect {
 		t.Fatal("startup client failed", err)
 	}
-	renewed, err := api.Refresh(ctx, lease, architectKey)
+	renewed, err := session.Refresh(ctx, project)
 	if err != nil || renewed.Epoch != lease.Epoch+1 {
 		t.Fatal("startup client refresh failed", err)
 	}
@@ -161,4 +169,9 @@ func TestRunnerOAuthCallbackAndMachineHTTPClaim(t *testing.T) {
 	if _, err = store.Authenticate(ctx, renewed.Token); err != nil {
 		t.Fatal(err)
 	}
+	saved, err := state.LoadLease(project)
+	if err != nil || saved.Token != renewed.Token || saved.Epoch != renewed.Epoch {
+		t.Fatal("startup session did not journal refreshed credential", err)
+	}
+
 }
