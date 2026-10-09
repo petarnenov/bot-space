@@ -44,8 +44,8 @@ func main() {
 // The full serve/control/provider runtime remains tracked separately. Enroll is
 // a concrete authentication entrypoint reused by automatic startup integration.
 func run(ctx context.Context, args []string, out io.Writer, open func(string) error) error {
-	if len(args) == 0 || (args[0] != "enroll" && args[0] != "doctor") {
-		return errors.New("usage: runner enroll|doctor --server ORIGIN --state ABSOLUTE_PATH --role architect|executor --project UUID [--project UUID]")
+	if len(args) == 0 || (args[0] != "enroll" && args[0] != "doctor" && args[0] != "serve") {
+		return errors.New("usage: runner serve|enroll|doctor --server ORIGIN --state ABSOLUTE_PATH --role architect|executor --project UUID [--project UUID]")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(out)
@@ -88,6 +88,9 @@ func run(ctx context.Context, args []string, out io.Writer, open func(string) er
 			}
 			return nil
 		}
+	}
+	if args[0] == "serve" {
+		return serveIdentity(ctx, session, scopes, open, out, connectIdentity)
 	}
 	seen := map[string]bool{}
 	for _, project := range scopes {

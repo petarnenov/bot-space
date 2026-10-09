@@ -238,3 +238,18 @@ These authentication bounds never create an execution deadline.
 The supervisor must replace native connections on OnLease and fence affected
 work on OnLoss; durable replay/execution reconciliation remain separate tracked
 runtime gates. Tests verify scope isolation, invalidation, backoff and recovery.
+
+## Automatic serve identity owner
+
+`runner serve` now automatically acquires configured project identity at startup,
+verifies native TLS self-inspection, retains the process/state lock and renews
+credentials through Lifecycle. Each successful refresh replaces the corresponding
+project connection; loss closes only that scope. Shutdown and partial startup
+failure close all acquired connections. Console status is metadata-only.
+
+A real production serve using the architect state reached identity_ready at
+epoch 3 and remained running until SIGINT, then exited cleanly. Unit/race tests
+verify automatic multi-scope acquisition, safe output and connection cleanup.
+This completes the identity startup component; task dispatch, model sessions and
+durable event replay remain separate unimplemented runtime tasks. identity_ready
+must not be presented as available execution capacity or completed work.
