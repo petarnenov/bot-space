@@ -127,7 +127,8 @@ HTTP requests use 1 MiB body limits, bounded timeouts, and documented
 two-second database/schema deadline. SIGINT/SIGTERM initiate a 20-second drain.
 Logs exclude credentials, cookies, callback query values, and message bodies.
 See [database operations](docs/database.md) and
-[Railway preparation](docs/railway.md). Railway deployment has not been executed.
+[Railway operations](docs/railway.md) and the
+[live deployment record](docs/live-deployment.md).
 
 For a local lifecycle smoke check, with Python 3 installed, run
 `python3 scripts/foundation-smoke.py`. It replaces the application container,

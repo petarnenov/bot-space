@@ -30,11 +30,23 @@ supported until 2026-12-01. Before that date migrate the authoring configuration
 using the official CLI and review its plan; do not overwrite live secret values
 or import them into tracked configuration. Current service settings are explicit.
 
-## GitHub Activation Pending
+## GitHub Activation Verified
 
-The initial deployment enables the authenticated mailbox but does not yet enable
-browser identity routes. The production OAuth credentials have not been supplied.
-Health 200 does not prove the user-facing product is fully activated.
+Deployment 6d7d2849-ab75-4d15-a7ba-1732d0c1125e successfully activated the
+production OAuth configuration. Public landing, health and readiness return 200;
+login returns 302 to GitHub using the active corrected Client ID, exact callback,
+S256 PKCE and a Secure/HttpOnly/SameSite=Lax attempt cookie. MCP without a bearer
+credential returns 401.
+
+An intentional invalid-code request to GitHub's token endpoint returned
+bad_verification_code with the supplied credentials and callback. No access token
+was issued. This verifies the credential probe, not a completed human login.
+The owner must authorize the application in their browser on first sign-in.
+
+Dashboard edits were initially staged while CLI variable listing still showed
+the old active values. The staged patch was inspected without printing secrets,
+verified to contain only the two OAuth variables for this service, and committed
+before deployment. Check pending changes when dashboard and active values differ.
 
 Create a GitHub OAuth App with homepage
 https://bot-space-production.up.railway.app and exact callback
@@ -59,8 +71,8 @@ deployment SSH key was registered for that check and then revoked and removed.
 
 ## Remaining Live Checks
 
-Complete GitHub activation, confirm browser landing/login and secure cookie/redirect
-behavior, and verify authenticated MCP through Railway's public proxy. Confirm
+Complete a human-authorized GitHub login and verify authenticated MCP through
+Railway's public proxy using browser-issued agent credentials. Confirm
 production backup retention/scheduling and an operator-managed restore drill.
 Local synthetic restore and SDK exchange proofs remain in verification.md;
 they do not substitute for these live checks.
