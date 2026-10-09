@@ -1,5 +1,16 @@
 # Runner packaging and service operations
 
+For foreground identity mode, run `make runner-executor`
+from the repository root. It builds the binary and starts the executor against
+the production server. Use `make runner-architect`
+for the architect role.
+Each role uses its own private `$HOME/.bot-space/<role>` state directory,
+automatically created by the runner, independently of project scopes. The current
+CLI requires at least one project. For now, `RUNNER_PROJECTS` defaults to the
+current project `bb25680f-eeea-4cde-b229-ddec09961c73`; override it with a
+space-separated list for other project scopes. Override
+`RUNNER_SERVER` and `RUNNER_STATE` as needed. Follow the printed sign-in URL when prompted.
+
 Build the runner binary from a clean checkout:
 
 ```sh

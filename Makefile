@@ -2,7 +2,7 @@
 	help \
 	compose-up compose-down compose-logs compose-recreate-app \
 	test-db-up test-db-down \
-	migrate serve \
+	migrate serve runner runner-executor runner-architect \
 	fmt-check mod-verify vet test test-package test-race test-race-package build vulncheck \
 	openspec-validate-all openspec-validate-change openspec-list openspec-status openspec-apply openspec-archive \
 	claude-smoke \
@@ -17,6 +17,10 @@ ENVIRONMENT ?= production
 PUBLIC_URL ?= https://bot-space-production.up.railway.app
 TEST_DB_CONTAINER ?= botspace-test-pg
 TEST_DB_PORT ?= 55432
+RUNNER_SERVER ?= $(PUBLIC_URL)
+RUNNER_PROJECTS ?= bb25680f-eeea-4cde-b229-ddec09961c73
+RUNNER_ROLE ?= executor
+RUNNER_STATE ?= $(HOME)/.bot-space/$(RUNNER_ROLE)
 
 help:
 	@echo "Common targets:"
@@ -26,6 +30,9 @@ help:
 	@echo "  make test-db-down              # stop/remove local test postgres"
 	@echo "  make migrate                    # go run ./cmd/mailbox migrate"
 	@echo "  make serve                      # go run ./cmd/mailbox serve"
+	@echo "  make runner RUNNER_PROJECTS='UUID [UUID ...]' [RUNNER_ROLE=architect] # build and start runner"
+	@echo "  make runner-executor RUNNER_PROJECTS='UUID [UUID ...]' # build and start executor"
+	@echo "  make runner-architect RUNNER_PROJECTS='UUID [UUID ...]' # build and start architect"
 	@echo "  make verify                     # full local verification gates"
 	@echo "  make openspec-list              # openspec list --json"
 	@echo "  make openspec-status CHANGE=<id>"
@@ -60,6 +67,19 @@ migrate:
 
 serve:
 	go run ./cmd/mailbox serve
+
+runner-executor:
+	$(MAKE) runner RUNNER_ROLE=executor
+
+runner-architect:
+	$(MAKE) runner RUNNER_ROLE=architect
+
+runner:
+	@case "$(RUNNER_ROLE)" in architect|executor) ;; *) echo "RUNNER_ROLE must be architect or executor"; exit 1 ;; esac
+	@test -n "$(strip $(RUNNER_PROJECTS))" || (echo "RUNNER_PROJECTS is required by the current CLI (example: make runner RUNNER_PROJECTS='UUID [UUID ...]')"; exit 1)
+	mkdir -p bin
+	go build -o bin/runner ./cmd/runner
+	./bin/runner serve --server "$(RUNNER_SERVER)" --state "$(RUNNER_STATE)" --role "$(RUNNER_ROLE)" $(foreach project,$(RUNNER_PROJECTS),--project "$(project)") --no-open
 
 fmt-check:
 	test -z "$$(gofmt -l cmd internal migrations tests examples)"

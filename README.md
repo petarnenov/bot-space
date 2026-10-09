@@ -83,7 +83,25 @@ export PG_BACKUP_CONTAINER="$(docker compose ps -q db)"
 make verify
 ```
 
-Use `make help` for OpenSpec, test-database, and Railway wrapper targets.
+Start a runner from the terminal (requires Go):
+
+```sh
+make runner-executor
+# In another terminal, start the architect role:
+make runner-architect
+```
+
+The target builds `bin/runner` and starts it in the foreground. It defaults to
+the production server, with private state in `$HOME/.bot-space/<role>` created
+by the runner. One machine identity and role can serve multiple project scopes;
+the state directory is independent of the projects. The current CLI requires
+at least one project UUID. For now, `RUNNER_PROJECTS` defaults to the current
+project `bb25680f-eeea-4cde-b229-ddec09961c73`; override it with a space-separated
+list to select other project scopes. Override `RUNNER_SERVER` or
+`RUNNER_STATE` for another setup. Follow the printed sign-in URL when
+authorization is required; stop with Ctrl+C.
+
+Use `make help` for runner, OpenSpec, test-database, and Railway wrapper targets.
 
 Without `TEST_DATABASE_URL`, real PostgreSQL integration tests explicitly skip.
 CI supplies it and runs the full checks. Source candidate GitHub Actions passed

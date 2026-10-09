@@ -8,6 +8,11 @@ Suggested directories are `src/` for source code, `tests/` for automated tests, 
 
 ## Build, Test, and Development Commands
 
+`make runner-executor` builds `bin/runner` and starts the executor in the foreground.
+Use `make runner-architect` for the architect role. Both default to the current
+project; override access scopes with `RUNNER_PROJECTS='UUID [UUID ...]'`. Requires Go;
+server, project and private state defaults and overrides are documented in README.md.
+
 No build, test, or local development commands are configured yet. When introducing a toolchain, document its installation requirements and exact commands in `README.md` and this guide.
 
 Provide reproducible commands for dependency installation, local development, testing, linting, and production builds where applicable. Do not document commands such as `npm test` or `make build` until their corresponding configuration exists.
