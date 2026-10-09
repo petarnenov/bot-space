@@ -33,3 +33,11 @@ not implement GitHub authorization, durable storage or distributed coordination.
 Verify rules with `go test -race ./internal/council`. Tests cover thresholds,
 ties, missing votes, exhaustion, reconsideration, duplicate/stale/outsider votes
 and immutable snapshots. Durable coordinator races are a separate tracked task.
+
+`Restore(snapshot, material)` reconstructs a persisted decision by replaying every
+round and vote through the same engine. It verifies material/proposal hashes,
+fixed membership, the strict-majority threshold and all resulting statuses.
+Forged acceptance, duplicate vote evidence, unsupported round advancement and
+changed material fail closed. A restart retains three-round exhaustion rather
+than resetting it. Database authorization, coordinator leases and transactional
+storage still belong to task 5.1; this reconstruction does not provide them.
