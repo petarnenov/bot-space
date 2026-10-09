@@ -1,0 +1,99 @@
+package integration
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"errors"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/petarnenov/bot-space/internal/repositoryaccess"
+	"github.com/petarnenov/bot-space/internal/runneridentity"
+	"github.com/petarnenov/bot-space/internal/security"
+)
+
+type runnerAuthority struct {
+	allowed       map[int64]bool
+	pool          *pgxpool.Pool
+	project       string
+	changeProject bool
+}
+
+func (a *runnerAuthority) Verify(ctx context.Context, _ repositoryaccess.Repository, id int64, force bool) error {
+	if !force {
+		return errors.New("enrollment must force current authority")
+	}
+	if a.changeProject {
+		_, err := a.pool.Exec(ctx, "UPDATE mailbox.orchestration_projects SET repository_id=99 WHERE id=$1", a.project)
+		if err != nil {
+			return err
+		}
+	}
+	if a.allowed[id] {
+		return nil
+	}
+	return repositoryaccess.ErrDenied
+}
+func TestRunnerEnrollmentDurableKeyAndGitHubBinding(t *testing.T) {
+	ctx, pool, _, w, _ := teams(t)
+	var project string
+	err := pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,42,101,'owner','project') RETURNING id::text`, w.ID).Scan(&project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority := &runnerAuthority{allowed: map[int64]bool{101: true, 102: true}, pool: pool, project: project}
+	store := &runneridentity.Store{Pool: pool, Authority: authority}
+	public, private, _ := ed25519.GenerateKey(rand.Reader)
+	nonce, _ := security.Secret()
+	message, _ := runneridentity.StartMessage(project, runneridentity.Executor, nonce)
+	proof := runneridentity.StartProof{ProjectID: project, Role: runneridentity.Executor, Nonce: nonce, PublicKey: public, Signature: ed25519.Sign(private, message)}
+	enrollment, err := store.Begin(ctx, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted := &runneridentity.Store{Pool: pool, Authority: authority}
+	repeated, err := restarted.Begin(ctx, proof)
+	if err != nil || repeated.ID != enrollment.ID {
+		t.Fatal("restart duplicated enrollment", err)
+	}
+	forged := proof
+	forged.Role = runneridentity.Architect
+	if _, err = store.Begin(ctx, forged); !errors.Is(err, runneridentity.ErrUnauthenticated) {
+		t.Fatal("forged role admitted", err)
+	}
+	if err = store.AuthorizeGitHub(ctx, enrollment.ID, 999); !errors.Is(err, runneridentity.ErrUnauthenticated) {
+		t.Fatal("public reader admitted", err)
+	}
+	if err = store.AuthorizeGitHub(ctx, enrollment.ID, 101); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.AuthorizeGitHub(ctx, enrollment.ID, 102); !errors.Is(err, runneridentity.ErrUnauthenticated) {
+		t.Fatal("authorized person replaced", err)
+	}
+	var githubID int64
+	if err = pool.QueryRow(ctx, "SELECT authorized_github_id FROM mailbox.runner_enrollments WHERE id=$1", enrollment.ID).Scan(&githubID); err != nil || githubID != 101 {
+		t.Fatal("wrong OAuth identity persisted", err)
+	}
+	if _, err = pool.Exec(ctx, "UPDATE mailbox.runner_enrollments SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", enrollment.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.Begin(ctx, proof); err == nil {
+		t.Fatal("expired attempt reused")
+	}
+	if err = store.AuthorizeGitHub(ctx, enrollment.ID, 101); err == nil {
+		t.Fatal("expired attempt authorized")
+	}
+	nonce, _ = security.Secret()
+	message, _ = runneridentity.StartMessage(project, runneridentity.Executor, nonce)
+	proof.Nonce = nonce
+	proof.Signature = ed25519.Sign(private, message)
+	fresh, err := store.Begin(ctx, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority.changeProject = true
+	if err = store.AuthorizeGitHub(ctx, fresh.ID, 101); !errors.Is(err, runneridentity.ErrUnauthenticated) {
+		t.Fatal("changed repository admitted after old verification", err)
+	}
+}
