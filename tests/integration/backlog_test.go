@@ -140,6 +140,52 @@ func TestHumanBacklogDurableIdempotencyAndAuthentication(t *testing.T) {
 	}
 }
 
+func TestOperatorBacklogIntakePreservesHumanProvenance(t *testing.T) {
+	ctx, pool, _, w, owner := teams(t)
+	var project string
+	if err := pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,42,101,'owner','project') RETURNING id::text`, w.ID).Scan(&project); err != nil {
+		t.Fatal(err)
+	}
+	authority := &backlogAuthority{true}
+	store := &backlog.Store{Pool: pool, Authority: authority}
+	input := backlog.Input{ProjectID: project, Key: "operator-story", Title: "Direct objective", Description: "Created without the UI", Priority: 2}
+	first, err := store.CreateForOperator(ctx, owner.GitHubID, input)
+	if err != nil || first.Creator != owner.ID || first.Revision != 1 {
+		t.Fatal("operator intake lost human provenance", first, err)
+	}
+	same, err := store.CreateForOperator(ctx, owner.GitHubID, input)
+	if err != nil || same.ID != first.ID {
+		t.Fatal("operator retry duplicated objective", same, err)
+	}
+	changed := input
+	changed.Description = "Conflicting payload"
+	if _, err = store.CreateForOperator(ctx, owner.GitHubID, changed); !errors.Is(err, backlog.ErrConflict) {
+		t.Fatal("operator conflict accepted", err)
+	}
+	if _, err = store.CreateForOperator(ctx, 999999, input); !errors.Is(err, backlog.ErrForbidden) {
+		t.Fatal("unknown operator identity accepted", err)
+	}
+	authority.allowed = false
+	denied := input
+	denied.Key = "denied"
+	if _, err = store.CreateForOperator(ctx, owner.GitHubID, denied); !errors.Is(err, backlog.ErrForbidden) {
+		t.Fatal("revoked project authority accepted", err)
+	}
+	var roots, revisions, audits int
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM mailbox.human_intentions WHERE project_id=$1", project).Scan(&roots); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM mailbox.human_intention_revisions WHERE project_id=$1", project).Scan(&revisions); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, "SELECT count(*) FROM mailbox.audit_events WHERE action='intention.created' AND target_id=$1", first.ID).Scan(&audits); err != nil {
+		t.Fatal(err)
+	}
+	if roots != 1 || revisions != 1 || audits != 1 {
+		t.Fatal("operator intake produced incomplete or duplicate records", roots, revisions, audits)
+	}
+}
+
 func TestHumanBacklogConcurrentKeysAndProjectIsolation(t *testing.T) {
 	ctx, pool, teamsStore, w, owner := teams(t)
 	other, err := teamsStore.Bootstrap(ctx, owner.GitHubID, "other-backlog")

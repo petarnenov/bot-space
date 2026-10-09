@@ -143,6 +143,27 @@ including when the URL wraps across lines. Redirected output and `TERM=dumb`
 use plain text; copy the full URL into your browser if needed. Both Make targets
 pass `--no-open`, so the browser opens when you follow the link. Stop with Ctrl+C.
 
+Submit an Objective directly to the shared queue without the UI when
+`DATABASE_URL` and the GitHub App verification variables are configured:
+
+```sh
+make objective \
+  PROJECT='bb25680f-eeea-4cde-b229-ddec09961c73' \
+  GITHUB_USER_ID='9674083' \
+  TITLE='Implement the requested change' \
+  DESCRIPTION='Detailed acceptance criteria'
+```
+
+Use `DESCRIPTION_FILE='./objective.md'` instead of `DESCRIPTION` for a large or
+multiline assignment. `PRIORITY` defaults to `2`; `TICKET` is optional. `KEY`
+is optional for a one-off submission. Supply a stable printable `KEY` when
+retrying automation: the same payload returns the same Objective, while a
+changed payload conflicts. Exactly one description source is required.
+
+The command requires an existing GitHub user with current repository authority.
+It prints only the Objective and project IDs. Invalid input, unknown users,
+revoked access, and conflicting keys fail without creating queue or audit data.
+
 Use `make help` for runner, OpenSpec, test-database, and Railway wrapper targets.
 
 Without `TEST_DATABASE_URL`, real PostgreSQL integration tests explicitly skip.

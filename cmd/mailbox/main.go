@@ -55,8 +55,8 @@ func run(logger *slog.Logger) error {
 	if len(os.Args) >= 2 {
 		command = os.Args[1]
 	}
-	if (len(os.Args) > 2 && command != "bootstrap-owner" && command != "bootstrap-project") || (command != "serve" && command != "migrate" && command != "bootstrap-owner" && command != "bootstrap-project") {
-		return fmt.Errorf("usage: mailbox [serve|migrate|bootstrap-owner|bootstrap-project]")
+	if (len(os.Args) > 2 && command != "bootstrap-owner" && command != "bootstrap-project" && command != "objective") || (command != "serve" && command != "migrate" && command != "bootstrap-owner" && command != "bootstrap-project" && command != "objective") {
+		return fmt.Errorf("usage: mailbox [serve|migrate|bootstrap-owner|bootstrap-project|objective]")
 	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
@@ -80,6 +80,22 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer pool.Close()
+	if command == "objective" {
+		options, e := parseObjectiveOptions(os.Args[2:], os.Getenv, readDescriptionFile)
+		if e != nil {
+			return e
+		}
+		checker, e := operatorAuthority(os.Getenv)
+		if e != nil {
+			return e
+		}
+		item, e := (&backlog.Store{Pool: pool, Authority: checker}).CreateForOperator(ctx, options.GitHubID, options.Input)
+		if e != nil {
+			return objectiveError(e)
+		}
+		logger.Info("objective_created", "objective_id", item.ID, "project_id", item.ProjectID)
+		return nil
+	}
 	if command == "bootstrap-project" {
 		flags := flag.NewFlagSet("bootstrap-project", flag.ContinueOnError)
 		flags.SetOutput(io.Discard)

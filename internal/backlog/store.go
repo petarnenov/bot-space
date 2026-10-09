@@ -14,6 +14,7 @@ import (
 	"github.com/petarnenov/bot-space/internal/identity"
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
 	"github.com/petarnenov/bot-space/internal/security"
+	"github.com/petarnenov/bot-space/internal/workspaces"
 )
 
 var ErrInvalid = errors.New("invalid human intention")
@@ -215,6 +216,35 @@ func (s *Store) Create(ctx context.Context, humanSecret string, input Input) (In
 	if err != nil {
 		return Intention{}, err
 	}
+	return s.createAuthorized(ctx, human.User, workspace, repo, humanSecret, in)
+}
+
+// CreateForOperator creates a human-originated objective without manufacturing
+// a browser session. Database access is the operator boundary; repository
+// authority and an existing immutable GitHub identity remain mandatory.
+func (s *Store) CreateForOperator(ctx context.Context, githubID int64, input Input) (Intention, error) {
+	in, err := normalize(input)
+	if err != nil || githubID < 1 || s.Authority == nil {
+		return Intention{}, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var human workspaces.User
+	var workspace string
+	var repo repositoryaccess.Repository
+	err = s.Pool.QueryRow(ctx, `SELECT u.id::text,u.github_id,u.username,p.workspace_id::text,p.repository_id,p.repository_owner_id,p.repository_owner,p.repository_name
+ FROM mailbox.users u CROSS JOIN mailbox.orchestration_projects p
+ WHERE u.github_id=$1 AND p.id=$2 AND p.active`, githubID, in.ProjectID).Scan(&human.ID, &human.GitHubID, &human.Username, &workspace, &repo.ID, &repo.OwnerID, &repo.Owner, &repo.Name)
+	if err != nil {
+		return Intention{}, ErrForbidden
+	}
+	if err = s.Authority.Verify(ctx, repo, human.GitHubID, true); err != nil {
+		return Intention{}, ErrForbidden
+	}
+	return s.createAuthorized(ctx, human, workspace, repo, "", in)
+}
+
+func (s *Store) createAuthorized(ctx context.Context, human workspaces.User, workspace string, repo repositoryaccess.Repository, humanSecret string, in Input) (Intention, error) {
 	raw, _ := json.Marshal(in)
 	fingerprint := security.Hash(string(raw))
 	tx, err := s.Pool.Begin(ctx)
@@ -222,10 +252,12 @@ func (s *Store) Create(ctx context.Context, humanSecret string, input Input) (In
 		return Intention{}, ErrUnavailable
 	}
 	defer rollback(tx)
-	var currentUser string
-	err = tx.QueryRow(ctx, `SELECT user_id::text FROM mailbox.sessions WHERE id_hash=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND last_seen_at>clock_timestamp()-interval '30 minutes' FOR SHARE`, security.Hash(humanSecret), human.User.ID).Scan(&currentUser)
-	if err != nil {
-		return Intention{}, ErrForbidden
+	if humanSecret != "" {
+		var currentUser string
+		err = tx.QueryRow(ctx, `SELECT user_id::text FROM mailbox.sessions WHERE id_hash=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND last_seen_at>clock_timestamp()-interval '30 minutes' FOR SHARE`, security.Hash(humanSecret), human.ID).Scan(&currentUser)
+		if err != nil {
+			return Intention{}, ErrForbidden
+		}
 	}
 	var id string
 	var stored string
@@ -233,19 +265,19 @@ func (s *Store) Create(ctx context.Context, humanSecret string, input Input) (In
  SELECT workspace_id,id,$2,$3,$4 FROM mailbox.orchestration_projects WHERE id=$1 AND active AND repository_id=$5 AND repository_owner_id=$6
  AND repository_owner=$7 AND repository_name=$8
  ON CONFLICT(project_id,creator_user_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
- RETURNING id::text,fingerprint`, in.ProjectID, human.User.ID, in.Key, fingerprint, repo.ID, repo.OwnerID, repo.Owner, repo.Name).Scan(&id, &stored)
+ RETURNING id::text,fingerprint`, in.ProjectID, human.ID, in.Key, fingerprint, repo.ID, repo.OwnerID, repo.Owner, repo.Name).Scan(&id, &stored)
 	if err != nil {
 		return Intention{}, ErrUnavailable
 	}
 	if stored != fingerprint {
 		return Intention{}, ErrConflict
 	}
-	inserted, err := tx.Exec(ctx, `INSERT INTO mailbox.human_intention_revisions(project_id,intention_id,revision,author_user_id,title,description,ticket_reference,priority) VALUES($1,$2,1,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, in.ProjectID, id, human.User.ID, in.Title, in.Description, in.Ticket, in.Priority)
+	inserted, err := tx.Exec(ctx, `INSERT INTO mailbox.human_intention_revisions(project_id,intention_id,revision,author_user_id,title,description,ticket_reference,priority) VALUES($1,$2,1,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, in.ProjectID, id, human.ID, in.Title, in.Description, in.Ticket, in.Priority)
 	if err != nil {
 		return Intention{}, ErrUnavailable
 	}
 	if inserted.RowsAffected() == 1 {
-		_, err = tx.Exec(ctx, `INSERT INTO mailbox.audit_events(workspace_id,actor_kind,actor_user_id,action,target_id,metadata) VALUES($1,'human',$2,'intention.created',$3,jsonb_build_object('project_id',$4::text,'revision',1))`, workspace, human.User.ID, id, in.ProjectID)
+		_, err = tx.Exec(ctx, `INSERT INTO mailbox.audit_events(workspace_id,actor_kind,actor_user_id,action,target_id,metadata) VALUES($1,'human',$2,'intention.created',$3,jsonb_build_object('project_id',$4::text,'revision',1))`, workspace, human.ID, id, in.ProjectID)
 		if err != nil {
 			return Intention{}, ErrUnavailable
 		}

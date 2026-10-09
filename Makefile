@@ -2,7 +2,7 @@
 	help doctor setup \
 	compose-up compose-down compose-logs compose-recreate-app \
 	test-db-up test-db-down \
-	migrate serve runner executor architect runner-executor runner-architect \
+	migrate serve runner executor architect runner-executor runner-architect objective \
 	fmt-check mod-verify vet test test-package test-race test-race-package build vulncheck \
 	openspec-validate-all openspec-validate-change openspec-list openspec-status openspec-apply openspec-archive \
 	claude-smoke \
@@ -34,6 +34,8 @@ help:
 	@echo "  make serve                      # go run ./cmd/mailbox serve"
 	@echo "  make executor                   # build and start executor (alias: runner-executor)"
 	@echo "  make architect                  # build and start architect (alias: runner-architect)"
+	@echo "  make objective PROJECT=<uuid> GITHUB_USER_ID=<id> TITLE='...' DESCRIPTION='...'"
+	@echo "    use DESCRIPTION_FILE=<path> instead of DESCRIPTION for long assignments"
 	@echo "  make runner [RUNNER_ROLE=architect] # build and start runner (default: executor)"
 	@echo "    RUNNER_SERVER=<origin> RUNNER_PROJECTS='UUID [UUID ...]' RUNNER_STATE=<absolute-path>"
 	@echo "  make verify                     # full local verification gates"
@@ -81,6 +83,17 @@ migrate:
 
 serve:
 	go run ./cmd/mailbox serve
+
+objective: export OBJECTIVE_PROJECT := $(PROJECT)
+objective: export OBJECTIVE_GITHUB_USER_ID := $(GITHUB_USER_ID)
+objective: export OBJECTIVE_TITLE := $(TITLE)
+objective: export OBJECTIVE_DESCRIPTION := $(DESCRIPTION)
+objective: export OBJECTIVE_DESCRIPTION_FILE := $(DESCRIPTION_FILE)
+objective: export OBJECTIVE_PRIORITY := $(PRIORITY)
+objective: export OBJECTIVE_TICKET := $(TICKET)
+objective: export OBJECTIVE_KEY := $(KEY)
+objective:
+	go run ./cmd/mailbox objective
 
 executor runner-executor:
 	$(MAKE) runner RUNNER_ROLE=executor
