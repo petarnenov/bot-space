@@ -21,7 +21,8 @@ verified merely by being listed here.
 The Go download API was rechecked and lists Go 1.27.2 as stable. The approved
 design records official release and documentation sources. Container digests,
 scanner versions, and action SHAs will be recorded when verified. No Railway
-deployment or hosted GitHub Actions run has been performed.
+deployment has been performed. Hosted source-candidate GitHub Actions passed;
+see the current [verification report](verification.md).
 
 Additional verified pins:
 

@@ -5,8 +5,9 @@ architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
 The five remote tools, durable delivery, browser management, and executable
-two-process exchange are implemented. The first four OpenSpec changes are
-verified and archived; the final release verification is in progress.
+two-process exchange are implemented. All five OpenSpec changes are
+verified and archived; release verification is recorded in
+[MVP verification](docs/verification.md).
 Configured `/mcp` exposes the five mailbox tools. Follow
 [MCP setup and the two-process request/reply example](docs/mcp.md); health checks
 alone do not prove message exchange.
@@ -91,8 +92,9 @@ OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive
 ```
 
 Without `TEST_DATABASE_URL`, real PostgreSQL integration tests explicitly skip.
-CI supplies it and runs the full checks. Local test results and hosted Actions
-results are separate evidence; hosted CI has not yet run.
+CI supplies it and runs the full checks. Source candidate GitHub Actions passed
+all required gates; [verification evidence](docs/verification.md) distinguishes
+that result from later commits and unexecuted external deployment checks.
 
 ## Architecture and Delivery
 

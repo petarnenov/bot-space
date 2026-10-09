@@ -22,9 +22,9 @@ The user approved autonomous implementation of the requested MVP. Source publica
 
 ## 4. Release Proof
 
-- [ ] 4.1 Run complete local formatting/module/vet/tests/race/build/module-vulnerability/OpenSpec checks and independent clean-checkout/container/request-reply reproduction; record authoritative outcomes and known external limits.
-- [ ] 4.2 Verify remote ancestry, review all staged source for real credentials/data, publish to the requested existing public repository, and monitor actual required GitHub Actions until green for the source commit. Do not overwrite divergent remote work or deploy Railway.
-- [ ] 4.3 Complete original-brief/spec-scenario audit and final README/CONTRIBUTING/SECURITY/client/operations evidence; verify every required deliverable against current files/runtime/CI and leave no unproven local work. Preserve external deployment limits and AGENTS.md bytes.
+- [x] 4.1 Run complete local formatting/module/vet/tests/race/build/module-vulnerability/OpenSpec checks and independent clean-checkout/container/request-reply reproduction; record authoritative outcomes and known external limits.
+- [x] 4.2 Verify remote ancestry, review all staged source for real credentials/data, publish to the requested existing public repository, and monitor actual required GitHub Actions until green for the source commit. Do not overwrite divergent remote work or deploy Railway.
+- [x] 4.3 Complete original-brief/spec-scenario audit and final README/CONTRIBUTING/SECURITY/client/operations evidence; verify every required deliverable against current files/runtime/CI and leave no unproven local work. Preserve external deployment limits and AGENTS.md bytes.
 
 ## Requirement-to-Check Mapping
 
