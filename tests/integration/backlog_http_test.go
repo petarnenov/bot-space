@@ -78,4 +78,46 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if response.StatusCode != 200 || !strings.Contains(string(raw), "Submit objective") || !strings.Contains(string(raw), "&lt;script&gt;") {
 		t.Fatal("backlog view missing")
 	}
+	control := url.Values{"csrf_token": {"wrong"}, "expected_epoch": {"1"}, "action": {"pause"}}
+	response = call("POST", location+"/control", control, true)
+	if response.StatusCode != 403 {
+		t.Fatal("control accepted invalid CSRF", response.StatusCode)
+	}
+	response.Body.Close()
+	control.Set("csrf_token", session.CSRF)
+	response = call("POST", location+"/control", control, false)
+	if response.StatusCode != 401 {
+		t.Fatal("agent controlled human root", response.StatusCode)
+	}
+	response.Body.Close()
+	response = call("POST", location+"/control", control, true)
+	if response.StatusCode != 303 {
+		t.Fatal("human pause rejected", response.StatusCode)
+	}
+	response.Body.Close()
+	response = call("GET", location, nil, true)
+	raw, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != 200 || !strings.Contains(string(raw), "Resume for architect reconciliation") || !strings.Contains(string(raw), "Lifecycle history") || !strings.Contains(string(raw), "epoch 2") {
+		t.Fatal("pause controls/history missing", string(raw))
+	}
+	control.Set("expected_epoch", "2")
+	control.Set("action", "archive")
+	response = call("POST", location+"/control", control, true)
+	if response.StatusCode != 303 {
+		t.Fatal("archive rejected", response.StatusCode)
+	}
+	response.Body.Close()
+	response = call("GET", location, nil, true)
+	raw, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != 200 || !strings.Contains(string(raw), "Archived — history is preserved.") || strings.Contains(string(raw), "Save new input revision") || strings.Contains(string(raw), "Cancel objective") || !strings.Contains(string(raw), "epoch 3") {
+		t.Fatal("archive did not preserve read-only history", string(raw))
+	}
+	response = call("GET", path, nil, true)
+	raw, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	if strings.Contains(string(raw), "&lt;script&gt;") {
+		t.Fatal("archived objective remained in backlog")
+	}
 }

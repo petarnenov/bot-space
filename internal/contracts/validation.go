@@ -5,6 +5,7 @@ import (
 	"time"
 
 	pb "github.com/petarnenov/bot-space/api/control/v1"
+	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/security"
 )
 
@@ -46,10 +47,15 @@ func (v *Validator) Validate(ctx context.Context, token, project, id string) (st
 		return "", ErrUnavailable
 	}
 	defer rollback(tx)
+	var epoch int64
+	err = tx.QueryRow(ctx, `SELECT lifecycle_epoch FROM mailbox.human_intentions WHERE project_id=$1 AND id=$2`, project, record.Content.RootID).Scan(&epoch)
+	if err != nil || backlog.LockExecutable(ctx, tx, project, record.Content.RootID, record.Content.RootRevision, epoch) != nil {
+		return "", ErrStale
+	}
 	var current bool
 	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mailbox.work_contracts c JOIN mailbox.human_intentions i ON i.project_id=c.project_id AND i.id=c.root_id
  JOIN mailbox.orchestration_projects p ON p.id=c.project_id JOIN mailbox.project_runners r ON r.project_id=c.project_id
- WHERE c.project_id=$1 AND c.id=$2 AND c.content_hash=$3 AND i.current_revision=c.root_revision AND i.state NOT IN ('cancelled','completed') AND p.active
+ WHERE c.project_id=$1 AND c.id=$2 AND c.content_hash=$3 AND i.current_revision=c.root_revision AND i.state NOT IN ('paused','cancelled','completed') AND NOT i.archived AND NOT i.reconciliation_required AND p.active
  AND r.id=$4 AND r.active AND r.role='architect' AND r.credential_hash=$5 AND r.credential_epoch=$6 AND r.credential_expires_at>clock_timestamp())`, project, id, digest, principal.RunnerID, security.Hash(token), principal.CredentialEpoch).Scan(&current)
 	if err != nil {
 		return "", ErrUnavailable
@@ -86,7 +92,7 @@ func (s *Store) RequireValidated(ctx context.Context, project, id, digest string
 	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mailbox.work_contracts c JOIN mailbox.contract_validations v
  ON v.project_id=c.project_id AND v.contract_id=c.id AND v.contract_hash=c.content_hash
  JOIN mailbox.human_intentions i ON i.project_id=c.project_id AND i.id=c.root_id JOIN mailbox.orchestration_projects p ON p.id=c.project_id
- WHERE c.project_id=$1 AND c.id=$2 AND c.content_hash=$3 AND i.current_revision=c.root_revision AND i.state NOT IN ('cancelled','completed') AND p.active)`, project, id, digest).Scan(&valid)
+ WHERE c.project_id=$1 AND c.id=$2 AND c.content_hash=$3 AND i.current_revision=c.root_revision AND i.state NOT IN ('paused','cancelled','completed') AND NOT i.archived AND NOT i.reconciliation_required AND p.active)`, project, id, digest).Scan(&valid)
 	if err != nil {
 		return ErrUnavailable
 	}

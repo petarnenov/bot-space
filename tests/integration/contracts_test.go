@@ -122,6 +122,25 @@ func TestContractPublicationAuthorityRevisionAndRestart(t *testing.T) {
 	if err = store.RequireValidated(ctx, project, first.ID, strings.Repeat("c", 64)); !errors.Is(err, contracts.ErrStale) {
 		t.Fatal("different hash inherited evidence", err)
 	}
+	paused, err := queue.Control(ctx, humanSecret, project, root.ID, "pause", 1)
+	if err != nil || paused.Epoch != 2 {
+		t.Fatal("pause contract root", err)
+	}
+	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("paused contract executable", err)
+	}
+	if _, err = validator.Validate(ctx, tokens["architect"], project, first.ID); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("paused validation accepted", err)
+	}
+	if _, err = store.Publish(ctx, tokens["architect"], content); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("paused contract publication accepted", err)
+	}
+	if _, err = queue.Control(ctx, humanSecret, project, root.ID, "resume", 2); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.RequireValidated(ctx, project, first.ID, first.Hash); !errors.Is(err, contracts.ErrStale) {
+		t.Fatal("unreconciled resumed contract executable", err)
+	}
 	input.Description = "Revised human scope"
 	if _, err = queue.Revise(ctx, humanSecret, root.ID, 1, input); err != nil {
 		t.Fatal(err)

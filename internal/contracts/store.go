@@ -53,7 +53,7 @@ func (s *Store) Publish(ctx context.Context, token string, input Content) (Recor
 	var revision int
 	err = tx.QueryRow(ctx, `SELECT p.workspace_id::text,i.current_revision FROM mailbox.orchestration_projects p
  JOIN mailbox.human_intentions i ON i.project_id=p.id WHERE p.id=$1 AND i.id=$2 AND p.active AND p.repository_id=$3
- AND i.state NOT IN ('cancelled','completed') FOR SHARE OF p,i`, content.ProjectID, content.RootID, content.RepositoryID).Scan(&workspace, &revision)
+ AND i.state NOT IN ('paused','cancelled','completed') AND NOT i.archived AND NOT i.reconciliation_required FOR SHARE OF p,i`, content.ProjectID, content.RootID, content.RepositoryID).Scan(&workspace, &revision)
 	if err != nil || revision != content.RootRevision {
 		return Record{}, ErrStale
 	}

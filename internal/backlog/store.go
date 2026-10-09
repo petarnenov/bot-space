@@ -38,16 +38,19 @@ type Input struct {
 	Priority    int    `json:"priority"`
 }
 type Intention struct {
-	ID          string    `json:"id"`
-	ProjectID   string    `json:"project_id"`
-	Creator     string    `json:"creator_user_id"`
-	Revision    int       `json:"revision"`
-	State       string    `json:"state"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Ticket      string    `json:"ticket_reference"`
-	Priority    int       `json:"priority"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                     string    `json:"id"`
+	ProjectID              string    `json:"project_id"`
+	Creator                string    `json:"creator_user_id"`
+	Revision               int       `json:"revision"`
+	State                  string    `json:"state"`
+	Title                  string    `json:"title"`
+	Description            string    `json:"description"`
+	Ticket                 string    `json:"ticket_reference"`
+	Priority               int       `json:"priority"`
+	CreatedAt              time.Time `json:"created_at"`
+	Epoch                  int64     `json:"lifecycle_epoch"`
+	Archived               bool      `json:"archived"`
+	ReconciliationRequired bool      `json:"reconciliation_required"`
 }
 
 func normalize(in Input) (Input, error) {
@@ -155,9 +158,9 @@ type reader interface {
 
 func read(ctx context.Context, q reader, project, id string, revision int) (Intention, error) {
 	var out Intention
-	err := q.QueryRow(ctx, `SELECT i.id::text,i.project_id::text,i.creator_user_id::text,r.revision,i.state,r.title,r.description,r.ticket_reference,r.priority,i.created_at
+	err := q.QueryRow(ctx, `SELECT i.id::text,i.project_id::text,i.creator_user_id::text,r.revision,i.state,r.title,r.description,r.ticket_reference,r.priority,i.created_at,i.lifecycle_epoch,i.archived,i.reconciliation_required
  FROM mailbox.human_intentions i JOIN mailbox.human_intention_revisions r ON r.project_id=i.project_id AND r.intention_id=i.id
- WHERE i.project_id=$1 AND i.id=$2 AND r.revision=$3`, project, id, revision).Scan(&out.ID, &out.ProjectID, &out.Creator, &out.Revision, &out.State, &out.Title, &out.Description, &out.Ticket, &out.Priority, &out.CreatedAt)
+ WHERE i.project_id=$1 AND i.id=$2 AND r.revision=$3`, project, id, revision).Scan(&out.ID, &out.ProjectID, &out.Creator, &out.Revision, &out.State, &out.Title, &out.Description, &out.Ticket, &out.Priority, &out.CreatedAt, &out.Epoch, &out.Archived, &out.ReconciliationRequired)
 	if err != nil {
 		return Intention{}, ErrUnavailable
 	}
@@ -188,7 +191,7 @@ func (s *Store) Revise(ctx context.Context, secret, id string, expected int, inp
 	var current int
 	var creator string
 	err = tx.QueryRow(ctx, `SELECT i.current_revision,i.creator_user_id::text FROM mailbox.human_intentions i
- JOIN mailbox.orchestration_projects p ON p.id=i.project_id WHERE i.id=$1 AND i.project_id=$2 AND p.active
+ JOIN mailbox.orchestration_projects p ON p.id=i.project_id WHERE i.id=$1 AND i.project_id=$2 AND p.active AND NOT i.archived AND i.state NOT IN ('cancelled','completed')
  AND p.repository_id=$3 AND p.repository_owner_id=$4 AND p.repository_owner=$5 AND p.repository_name=$6 FOR UPDATE OF i FOR SHARE OF p`, id, in.ProjectID, repo.ID, repo.OwnerID, repo.Owner, repo.Name).Scan(&current, &creator)
 	if err != nil || creator != human.User.ID {
 		return Intention{}, ErrForbidden
@@ -245,9 +248,9 @@ func (s *Store) List(ctx context.Context, secret, project, after string) ([]Inte
 	if _, _, _, err := s.authorize(ctx, secret, project); err != nil {
 		return nil, err
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT i.id::text,i.project_id::text,i.creator_user_id::text,r.revision,i.state,r.title,r.description,r.ticket_reference,r.priority,i.created_at
+	rows, err := s.Pool.Query(ctx, `SELECT i.id::text,i.project_id::text,i.creator_user_id::text,r.revision,i.state,r.title,r.description,r.ticket_reference,r.priority,i.created_at,i.lifecycle_epoch,i.archived,i.reconciliation_required
  FROM mailbox.human_intentions i JOIN mailbox.human_intention_revisions r ON r.project_id=i.project_id AND r.intention_id=i.id AND r.revision=i.current_revision
- WHERE i.project_id=$1 AND ($2='' OR (i.created_at,i.id)>(SELECT created_at,id FROM mailbox.human_intentions WHERE project_id=$1 AND id=NULLIF($2,'')::uuid))
+ WHERE i.project_id=$1 AND NOT i.archived AND ($2='' OR (i.created_at,i.id)>(SELECT created_at,id FROM mailbox.human_intentions WHERE project_id=$1 AND id=NULLIF($2,'')::uuid))
  ORDER BY i.created_at,i.id LIMIT 50`, project, after)
 	if err != nil {
 		return nil, ErrUnavailable
@@ -256,7 +259,7 @@ func (s *Store) List(ctx context.Context, secret, project, after string) ([]Inte
 	out := []Intention{}
 	for rows.Next() {
 		var item Intention
-		if err = rows.Scan(&item.ID, &item.ProjectID, &item.Creator, &item.Revision, &item.State, &item.Title, &item.Description, &item.Ticket, &item.Priority, &item.CreatedAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.ProjectID, &item.Creator, &item.Revision, &item.State, &item.Title, &item.Description, &item.Ticket, &item.Priority, &item.CreatedAt, &item.Epoch, &item.Archived, &item.ReconciliationRequired); err != nil {
 			return nil, ErrUnavailable
 		}
 		out = append(out, item)
