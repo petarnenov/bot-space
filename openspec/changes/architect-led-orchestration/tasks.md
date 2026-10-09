@@ -6,7 +6,7 @@
 
 ## 2. Native control transport
 
-- [ ] 2.1 Define protobuf control messages and generated gRPC services with bounded unary/stream behavior; verify local authenticated unary calls, trailers and simultaneous bidirectional tests and document generation.
+- [x] 2.1 Define protobuf control messages and generated gRPC services with bounded unary/stream behavior; verify local authenticated unary calls, trailers and simultaneous bidirectional tests and document generation.
 - [ ] 2.2 Prove native TLS gRPC through the real Railway ingress, including trailers and reconnect; retain reproducible client output and document the verified topology.
 
 ## 3. Automatic collaborator identity

@@ -1,0 +1,39 @@
+syntax = "proto3";
+package botspace.control.v1;
+option go_package = "github.com/petarnenov/bot-space/api/control/v1;controlv1";
+
+// All operations require scoped runner authentication. Enrollment uses the
+// browser OAuth/key-proof flow; this service never accepts claimed identities.
+service Control {
+  rpc Presence(PresenceRequest) returns (PresenceResponse);
+  rpc Inspect(InspectRequest) returns (InspectResponse);
+  rpc Connect(stream RunnerFrame) returns (stream ServerFrame);
+}
+
+enum Role { ROLE_UNSPECIFIED = 0; ROLE_ARCHITECT = 1; ROLE_EXECUTOR = 2; }
+enum Availability { AVAILABILITY_UNSPECIFIED = 0; AVAILABILITY_FREE = 1; AVAILABILITY_BUSY = 2; AVAILABILITY_DRAINING = 3; }
+message ProviderSettings { string client = 1; string version = 2; string model = 3; string effort = 4; }
+message PresenceRequest { ProviderSettings provider = 1; Availability availability = 2; repeated string project_mappings = 3; repeated string tools = 4; string execution_policy = 5; }
+message PresenceResponse { string runner_id = 1; string project_id = 2; Role role = 3; uint64 credential_epoch = 4; }
+message InspectRequest { string resource_id = 1; }
+message InspectResponse { string resource_id = 1; string state = 2; string revision = 3; }
+message Resume { uint64 committed_cursor = 1; }
+message Ack { uint64 cursor = 1; string event_id = 2; }
+message Vote { string decision_id = 1; uint32 round = 2; string proposal_hash = 3; string choice = 4; }
+message Proposal { string decision_id = 1; uint32 round = 2; string material_revision = 3; bytes canonical_content = 4; }
+message Question { string assignment_id = 1; uint64 attempt_epoch = 2; string contract_hash = 3; string session_id = 4; string question = 5; }
+message Progress { string assignment_id = 1; uint64 attempt_epoch = 2; string session_id = 3; string description = 4; }
+message Result { string assignment_id = 1; uint64 attempt_epoch = 2; string contract_hash = 3; string commit = 4; repeated string artifacts = 5; bytes evidence = 6; }
+message RunnerFrame {
+  string request_id = 1;
+  oneof body { Resume resume = 2; Ack ack = 3; Vote vote = 4; Proposal proposal = 5; Question question = 6; Progress progress = 7; Result result = 8; }
+}
+message Assignment { string assignment_id = 1; uint64 attempt_epoch = 2; string contract_hash = 3; string repository = 4; string branch = 5; string base_commit = 6; string openspec_change = 7; string instruction = 8; }
+message CouncilEvent { string decision_id = 1; uint32 round = 2; string proposal_hash = 3; bytes proposal = 4; repeated string members = 5; uint32 required_approvals = 6; string state = 7; }
+message Answer { string question_id = 1; string assignment_id = 2; uint64 attempt_epoch = 3; string contract_hash = 4; string session_id = 5; string answer = 6; string decision_id = 7; }
+message Receipt { string request_id = 1; }
+message ServerFrame {
+  string event_id = 1;
+  uint64 cursor = 2;
+  oneof body { Assignment assignment = 3; CouncilEvent council = 4; Answer answer = 5; Receipt receipt = 6; }
+}
