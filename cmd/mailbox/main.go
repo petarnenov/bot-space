@@ -23,6 +23,8 @@ import (
 	"github.com/petarnenov/bot-space/internal/mailbox"
 	"github.com/petarnenov/bot-space/internal/mcpserver"
 	"github.com/petarnenov/bot-space/internal/ratelimit"
+	"github.com/petarnenov/bot-space/internal/repositoryaccess"
+	"github.com/petarnenov/bot-space/internal/runneridentity"
 	management "github.com/petarnenov/bot-space/internal/web"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 	"github.com/petarnenov/bot-space/migrations"
@@ -91,12 +93,26 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	runnerIdentityConfig, err := config.LoadRunnerIdentity(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if runnerIdentityConfig.Enabled && !identityConfig.Enabled {
+		return errors.New("runner identity requires GitHub browser authentication")
+	}
 	server := httpserver.New(func(ctx context.Context) error { return database.Ready(ctx, pool, versions) }, logger)
 	loginLimit, mcpPeerLimit := ratelimit.New(20, 5, 10000, nil), ratelimit.New(120, 60, 10000, nil)
 	server.Use(func(next http.Handler) http.Handler { return ratelimit.PeerAdmission(loginLimit, mcpPeerLimit, next) })
 	if identityConfig.Enabled {
 		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
 		web.Register(server)
+		if runnerIdentityConfig.Enabled {
+			authority, err := repositoryaccess.New(func(context.Context) (string, error) { return runnerIdentityConfig.RepositoryToken, nil })
+			if err != nil {
+				return err
+			}
+			(&runneridentity.Web{Store: &runneridentity.Store{Pool: pool, Authority: authority}, Browser: web, ControlEndpoint: runnerIdentityConfig.ControlEndpoint, ControlCA: runnerIdentityConfig.ControlCA}).Register(server)
+		}
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
 		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, MailboxEnabled: mailboxConfig.Enabled}).Register(server)
 	}

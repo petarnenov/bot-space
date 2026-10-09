@@ -143,3 +143,19 @@ silently replace revoked, corrupt or foreign-scoped state. Refresh also journals
 its new epoch. Real-PG/mock-GitHub HTTP tests verify enrollment, refresh and
 credential persistence together. Full production startup command wiring remains
 pending.
+
+## CLI authentication entrypoint and server switch
+
+`runner enroll --server https://SERVER --state /private/executor --role executor
+--project PROJECT_UUID` acquires and journals identity; repeat `--project` for
+additional eligible scopes. It outputs only runner/project/role/epoch metadata,
+never the lease or bearer token. This authentication entrypoint does not yet
+implement the final automatic `serve` execution/control runtime.
+
+Enable HTTP enrollment with RUNNER_IDENTITY_ENABLED=true only after configuring
+GITHUB_REPOSITORY_TOKEN, CONTROL_ENDPOINT, CONTROL_TLS_CERT and CONTROL_TLS_KEY.
+The verification token needs repository metadata access; it is not an OAuth
+client secret. Certificate hostname must match the native endpoint. The switch
+is off by default, preserving the existing browser/mailbox deployment. Configured
+projects must exist in PostgreSQL; project setup and live activation remain
+pending. Do not interpret enabled HTTP identity as a ready execution backend.
