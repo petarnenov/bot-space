@@ -1,8 +1,9 @@
 # Railway Deployment Preparation
 
-`railway.toml` and the Dockerfile prepare deployment. No Railway resources have
-been created and no live Railway deployment has been tested. Paid provisioning
-and publication require explicit owner permission.
+`railway.toml` and the Dockerfile define deployment settings. The owner authorized
+Railway publication on 2026-10-09; the [live deployment record](live-deployment.md)
+tracks executed checks and the remaining GitHub activation. Historical MVP
+verification reports describe the earlier preparation-only stage.
 
 The Docker build uses Go 1.27.2 and a digest-pinned non-root Distroless runtime with
 CA certificates. The same `/mailbox` binary serves HTTP and runs migrations.
