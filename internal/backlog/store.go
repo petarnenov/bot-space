@@ -53,6 +53,114 @@ type Intention struct {
 	ReconciliationRequired bool      `json:"reconciliation_required"`
 }
 
+type Project struct {
+	ID, WorkspaceID, Owner, Name string
+}
+
+type Progress struct {
+	Phase, Outcome                         string
+	Decisions, Assignments, Attempts, Done int
+}
+
+// Projects returns a bounded list of active projects for which the current
+// GitHub user still has explicit repository authority. Workspace membership is
+// intentionally not used as project authority.
+func (s *Store) Projects(ctx context.Context, secret string) ([]Project, error) {
+	if s.Sessions == nil || s.Authority == nil {
+		return nil, ErrUnavailable
+	}
+	session, err := s.Sessions.Authenticate(ctx, secret)
+	if err != nil {
+		return nil, ErrForbidden
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	rows, err := s.Pool.Query(ctx, `SELECT id::text,workspace_id::text,repository_id,repository_owner_id,repository_owner,repository_name
+ FROM mailbox.orchestration_projects WHERE active ORDER BY repository_owner,repository_name,id LIMIT 129`)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	defer rows.Close()
+	type candidate struct {
+		project Project
+		repo    repositoryaccess.Repository
+	}
+	candidates := []candidate{}
+	for rows.Next() {
+		var c candidate
+		if err = rows.Scan(&c.project.ID, &c.project.WorkspaceID, &c.repo.ID, &c.repo.OwnerID, &c.repo.Owner, &c.repo.Name); err != nil {
+			return nil, ErrUnavailable
+		}
+		c.project.Owner, c.project.Name = c.repo.Owner, c.repo.Name
+		candidates = append(candidates, c)
+	}
+	if rows.Err() != nil || len(candidates) > 128 {
+		return nil, ErrUnavailable
+	}
+	out := []Project{}
+	for _, c := range candidates {
+		err = s.Authority.Verify(ctx, c.repo, session.User.GitHubID, false)
+		if errors.Is(err, repositoryaccess.ErrDenied) {
+			continue
+		}
+		if err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, c.project)
+	}
+	return out, nil
+}
+
+func (s *Store) Project(ctx context.Context, secret, id string) (Project, error) {
+	if !security.ValidUUID(id) {
+		return Project{}, ErrInvalid
+	}
+	projects, err := s.Projects(ctx, secret)
+	if err != nil {
+		return Project{}, err
+	}
+	for _, project := range projects {
+		if strings.EqualFold(project.ID, id) {
+			return project, nil
+		}
+	}
+	return Project{}, ErrForbidden
+}
+
+// Progress summarizes only durable workflow records attached to an objective.
+// It deliberately does not expose runner identities, votes, or private task input.
+func (s *Store) Progress(ctx context.Context, secret, project, id string) (Progress, error) {
+	if !security.ValidUUID(project) || !security.ValidUUID(id) {
+		return Progress{}, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, _, _, err := s.authorize(ctx, secret, project); err != nil {
+		return Progress{}, err
+	}
+	var out Progress
+	err := s.Pool.QueryRow(ctx, `SELECT i.state,
+	 (SELECT count(*) FROM mailbox.council_decisions d WHERE d.project_id=i.project_id AND d.root_id=i.id),
+	 (SELECT count(*) FROM mailbox.work_assignments a WHERE a.project_id=i.project_id AND a.root_id=i.id),
+	 (SELECT count(*) FROM mailbox.work_attempts t JOIN mailbox.work_assignments a ON a.project_id=t.project_id AND a.id=t.assignment_id WHERE a.project_id=i.project_id AND a.root_id=i.id),
+	 (SELECT count(*) FROM mailbox.work_assignments a WHERE a.project_id=i.project_id AND a.root_id=i.id AND a.state='completed')
+	 FROM mailbox.human_intentions i WHERE i.project_id=$1 AND i.id=$2`, project, id).Scan(&out.Phase, &out.Decisions, &out.Assignments, &out.Attempts, &out.Done)
+	if err != nil {
+		return Progress{}, ErrForbidden
+	}
+	switch out.Phase {
+	case "completed":
+		out.Outcome = "Completed. The recorded workflow contains no separate human-facing result."
+	case "cancelled":
+		out.Outcome = "Cancelled. Recorded history remains available."
+	case "paused":
+		out.Outcome = "Paused pending architect reconciliation."
+	default:
+		out.Outcome = "No final outcome has been recorded yet."
+	}
+	return out, nil
+}
+
 func normalize(in Input) (Input, error) {
 	in.ProjectID = strings.ToLower(in.ProjectID)
 	in.Title = strings.TrimSpace(in.Title)

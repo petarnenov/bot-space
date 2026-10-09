@@ -152,6 +152,7 @@ func run(logger *slog.Logger) error {
 	if identityConfig.Enabled {
 		web := &identity.Web{Config: identityConfig, Sessions: &identity.Sessions{Pool: pool}, Workspaces: &workspaces.Store{Pool: pool}, Provider: identity.GitHubProvider()}
 		web.Register(server)
+		var backlogStore *backlog.Store
 		if runnerIdentityConfig.Enabled {
 			authority, err := repositoryaccess.New(runnerIdentityConfig.AppTokens.Token)
 			if err != nil {
@@ -159,10 +160,11 @@ func run(logger *slog.Logger) error {
 			}
 			runnerIdentities = &runneridentity.Store{Pool: pool, Authority: authority}
 			(&runneridentity.Web{Store: runnerIdentities, Browser: web, ControlEndpoint: runnerIdentityConfig.ControlEndpoint, ControlCA: runnerIdentityConfig.ControlCA}).Register(server)
-			(&backlog.Web{Store: &backlog.Store{Pool: pool, Sessions: web.Sessions, Authority: authority}, Browser: web}).Register(server)
+			backlogStore = &backlog.Store{Pool: pool, Sessions: web.Sessions, Authority: authority}
+			(&backlog.Web{Store: backlogStore, Browser: web}).Register(server)
 		}
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
-		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, MailboxEnabled: mailboxConfig.Enabled}).Register(server)
+		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, Projects: backlogStore, MailboxEnabled: mailboxConfig.Enabled}).Register(server)
 		if mailboxConfig.Enabled && mailboxConfig.TasksEnabled {
 			(&taskweb.Web{Browser: web, Tasks: &tasks.Store{Pool: pool}}).Register(server)
 		}

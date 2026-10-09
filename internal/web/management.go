@@ -2,6 +2,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"html/template"
@@ -13,10 +14,15 @@ import (
 	"time"
 
 	"github.com/petarnenov/bot-space/internal/agents"
+	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/identity"
 	"github.com/petarnenov/bot-space/internal/security"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 )
+
+func setProjectCookie(rw http.ResponseWriter, project string, secure bool) {
+	http.SetCookie(rw, &http.Cookie{Name: "bot_space_project", Value: project, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: 30 * 24 * 60 * 60})
+}
 
 //go:embed assets/* templates/*
 var content embed.FS
@@ -25,6 +31,7 @@ type Management struct {
 	Browser        *identity.Web
 	Teams          *workspaces.Store
 	Agents         *agents.Store
+	Projects       *backlog.Store
 	MailboxEnabled bool
 }
 type agentView struct {
@@ -40,6 +47,9 @@ type page struct {
 	Invitations                                    []workspaces.Invitation
 	Agents                                         []agentView
 	TeamAgents                                     []workspaces.TeamAgent
+	Projects                                       []backlog.Project
+	CurrentProject                                 *backlog.Project
+	Active                                         string
 	Admin, Owner, MailboxEnabled                   bool
 	Invitation                                     *workspaces.Invitation
 	InvitationID, InvitationSecret, InvitationLink string
@@ -52,6 +62,10 @@ func (m *Management) Register(routes identity.Routes) {
 	m.Browser.WorkspaceRenderer = m.workspace
 	static, _ := fs.Sub(content, "assets")
 	routes.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(static))))
+	routes.Handle("GET /profile", m.Browser.Protect(false, m.profile))
+	routes.Handle("GET /settings", m.Browser.Protect(false, m.settings))
+	routes.Handle("GET /projects/{project}/settings", m.Browser.Protect(false, m.projectSettings))
+	routes.Handle("GET /workspaces/{workspaceID}/settings", m.Browser.Protect(false, m.workspace))
 	routes.Handle("POST /workspaces/{workspaceID}/members/{userID}/role", m.Browser.Protect(true, m.setRole))
 	routes.Handle("POST /workspaces/{workspaceID}/members/{userID}/remove", m.Browser.Protect(true, m.removeMember))
 	routes.Handle("POST /workspaces/{workspaceID}/invitations", m.Browser.Protect(true, m.invite))
@@ -69,25 +83,148 @@ func render(rw http.ResponseWriter, data page) {
 }
 
 func (m *Management) home(rw http.ResponseWriter, r *http.Request, session *identity.Session) {
-	data := page{Title: "Your workspaces", Session: session, MailboxEnabled: m.MailboxEnabled}
-	if session != nil {
+	data := page{Title: "The Firm", Session: session, MailboxEnabled: m.MailboxEnabled, Active: "objectives"}
+	if session == nil {
+		render(rw, data)
+		return
+	}
+	if m.Projects == nil {
 		list, err := m.Teams.List(r.Context(), session.User.ID)
 		if err != nil {
-			http.Error(rw, "Workspace listing unavailable", 503)
+			http.Error(rw, "Workspace listing unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		data.Workspaces = list
+		data.Title = "Workspaces"
+		render(rw, data)
+		return
+	}
+	projects, err := m.Projects.Projects(r.Context(), m.secret(r))
+	if err != nil {
+		http.Error(rw, "Project listing unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	data.Projects = projects
+	if requested := strings.ToLower(r.URL.Query().Get("project")); requested != "" {
+		if !security.ValidUUID(requested) {
+			http.Error(rw, "Invalid project selection", http.StatusBadRequest)
+			return
+		}
+		for i := range projects {
+			if projects[i].ID == requested {
+				setProjectCookie(rw, requested, m.Browser.Config.SecureCookies)
+				http.Redirect(rw, r, "/projects/"+requested, http.StatusSeeOther)
+				return
+			}
+		}
+		http.Error(rw, "Project unavailable", http.StatusForbidden)
+		return
+	}
+	selected := selectedProject(r)
+	for i := range projects {
+		if projects[i].ID == selected {
+			http.Redirect(rw, r, "/projects/"+projects[i].ID, http.StatusSeeOther)
+			return
+		}
+	}
+	if len(projects) == 1 {
+		http.Redirect(rw, r, "/projects/"+projects[0].ID, http.StatusSeeOther)
+		return
 	}
 	render(rw, data)
 }
 
+func (m *Management) secret(r *http.Request) string {
+	cookie, err := r.Cookie(m.Browser.CookieName())
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+func selectedProject(r *http.Request) string {
+	cookie, err := r.Cookie("bot_space_project")
+	if err != nil || !security.ValidUUID(cookie.Value) {
+		return ""
+	}
+	return strings.ToLower(cookie.Value)
+}
+
+func (m *Management) navigation(ctx context.Context, r *http.Request, data *page) error {
+	if data.Session == nil || m.Projects == nil {
+		return nil
+	}
+	projects, err := m.Projects.Projects(ctx, m.secret(r))
+	if err != nil {
+		return err
+	}
+	data.Projects = projects
+	selected := selectedProject(r)
+	for i := range projects {
+		if projects[i].ID == selected {
+			data.CurrentProject = &projects[i]
+			break
+		}
+	}
+	return nil
+}
+
+func (m *Management) profile(rw http.ResponseWriter, r *http.Request, session identity.Session) {
+	data := page{Title: "Profile", Session: &session, Active: "profile", MailboxEnabled: m.MailboxEnabled}
+	if err := m.navigation(r.Context(), r, &data); err != nil {
+		http.Error(rw, "Profile navigation unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	render(rw, data)
+}
+
+func (m *Management) settings(rw http.ResponseWriter, r *http.Request, session identity.Session) {
+	list, err := m.Teams.List(r.Context(), session.User.ID)
+	if err != nil {
+		http.Error(rw, "Workspace listing unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	data := page{Title: "Settings", Session: &session, Workspaces: list, Active: "settings", MailboxEnabled: m.MailboxEnabled}
+	if err := m.navigation(r.Context(), r, &data); err != nil {
+		http.Error(rw, "Settings unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	render(rw, data)
+}
+
+func (m *Management) projectSettings(rw http.ResponseWriter, r *http.Request, session identity.Session) {
+	if m.Projects == nil {
+		http.NotFound(rw, r)
+		return
+	}
+	project, err := m.Projects.Project(r.Context(), m.secret(r), r.PathValue("project"))
+	if err != nil {
+		http.Error(rw, "Project settings unavailable", http.StatusForbidden)
+		return
+	}
+	setProjectCookie(rw, project.ID, m.Browser.Config.SecureCookies)
+	http.Redirect(rw, r, "/workspaces/"+project.WorkspaceID+"/settings", http.StatusSeeOther)
+}
+
 func (m *Management) workspace(rw http.ResponseWriter, r *http.Request, s identity.Session) {
+	if r.URL.Path == "/workspaces/"+r.PathValue("workspaceID") {
+		if _, err := m.Teams.Get(r.Context(), r.PathValue("workspaceID"), s.User.ID); err != nil {
+			http.Error(rw, "Workspace unavailable", http.StatusForbidden)
+			return
+		}
+		http.Redirect(rw, r, "/workspaces/"+r.PathValue("workspaceID")+"/settings", http.StatusTemporaryRedirect)
+		return
+	}
 	w, err := m.Teams.Get(r.Context(), r.PathValue("workspaceID"), s.User.ID)
 	if err != nil {
 		http.Error(rw, "Workspace unavailable", 403)
 		return
 	}
-	data := page{Title: w.Slug, Session: &s, Workspace: &w, Admin: w.Role == "owner" || w.Role == "admin", Owner: w.Role == "owner", MailboxEnabled: m.MailboxEnabled}
+	data := page{Title: w.Slug + " settings", Session: &s, Workspace: &w, Admin: w.Role == "owner" || w.Role == "admin", Owner: w.Role == "owner", MailboxEnabled: m.MailboxEnabled, Active: "settings"}
+	if err := m.navigation(r.Context(), r, &data); err != nil {
+		http.Error(rw, "Settings navigation unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	data.Members, err = m.Teams.Members(r.Context(), w.ID, s.User.ID)
 	if err != nil {
 		http.Error(rw, "Members unavailable", 503)
@@ -144,14 +281,14 @@ func (m *Management) setRole(rw http.ResponseWriter, r *http.Request, s identity
 		actionError(rw, err)
 		return
 	}
-	http.Redirect(rw, r, "/workspaces/"+r.PathValue("workspaceID"), 303)
+	http.Redirect(rw, r, "/workspaces/"+r.PathValue("workspaceID")+"/settings", 303)
 }
 func (m *Management) removeMember(rw http.ResponseWriter, r *http.Request, s identity.Session) {
 	if err := m.Teams.Remove(r.Context(), r.PathValue("workspaceID"), s.User.ID, r.PathValue("userID")); err != nil {
 		actionError(rw, err)
 		return
 	}
-	http.Redirect(rw, r, "/", 303)
+	http.Redirect(rw, r, "/settings", 303)
 }
 func (m *Management) invite(rw http.ResponseWriter, r *http.Request, s identity.Session) {
 	target, err := strconv.ParseInt(r.PostForm.Get("github_user_id"), 10, 64)
@@ -172,7 +309,7 @@ func (m *Management) cancelInvite(rw http.ResponseWriter, r *http.Request, s ide
 		actionError(rw, err)
 		return
 	}
-	http.Redirect(rw, r, "/workspaces/"+r.PathValue("workspaceID"), 303)
+	http.Redirect(rw, r, "/workspaces/"+r.PathValue("workspaceID")+"/settings", 303)
 }
 
 func (m *Management) invitationPage(rw http.ResponseWriter, r *http.Request) {

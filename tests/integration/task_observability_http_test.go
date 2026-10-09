@@ -150,6 +150,9 @@ func TestTaskObservabilityPagesControlsAndPrivacy(t *testing.T) {
 	if !strings.Contains(listBody, "offline") {
 		t.Fatal("offline recipient state not shown")
 	}
+	if !strings.Contains(listBody, "Primary navigation") || !strings.Contains(listBody, "/profile") || !strings.Contains(listBody, "/settings") || !strings.Contains(listBody, "/workspaces/"+workspace.ID+"/settings") {
+		t.Fatal("task navigation is incomplete")
+	}
 	if strings.Contains(listBody, "<script>alert(1)</script>") {
 		t.Fatal("task instruction not escaped in list")
 	}

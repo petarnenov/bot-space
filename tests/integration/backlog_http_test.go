@@ -18,6 +18,10 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,42,101,'owner','project') RETURNING id::text`, w.ID).Scan(&project); err != nil {
 		t.Fatal(err)
 	}
+	var secondProject string
+	if err := pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,43,101,'owner','second') RETURNING id::text`, w.ID).Scan(&secondProject); err != nil {
+		t.Fatal(err)
+	}
 	sessions := &identity.Sessions{Pool: pool}
 	session, secret, err := sessions.Login(ctx, owner.GitHubID, owner.Username, "")
 	if err != nil {
@@ -29,7 +33,8 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	browser := &identity.Web{Config: config.Identity{BaseURL: "http://" + server.Listener.Addr().String()}, Sessions: sessions}
 	(&backlog.Web{Store: &backlog.Store{Pool: pool, Sessions: sessions, Authority: &backlogAuthority{true}}, Browser: browser}).Register(mux)
 	server.Start()
-	path := "/projects/" + project + "/intentions"
+	dashboardPath := "/projects/" + project
+	intakePath := dashboardPath + "/intentions"
 	call := func(method, path string, form url.Values, cookie bool) *http.Response {
 		t.Helper()
 		request, _ := http.NewRequest(method, server.URL+path, strings.NewReader(form.Encode()))
@@ -48,19 +53,19 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 		return response
 	}
 	form := url.Values{"csrf_token": {session.CSRF}, "idempotency_key": {"http-story"}, "title": {"<script>attack()</script>"}, "description": {"Human objective"}, "priority": {"2"}}
-	response := call("POST", path, form, false)
+	response := call("POST", intakePath, form, false)
 	if response.StatusCode != 401 {
 		t.Fatal("agent bearer authenticated intake")
 	}
 	response.Body.Close()
 	form.Set("csrf_token", "wrong")
-	response = call("POST", path, form, true)
+	response = call("POST", intakePath, form, true)
 	if response.StatusCode != 403 {
 		t.Fatal("invalid CSRF admitted")
 	}
 	response.Body.Close()
 	form.Set("csrf_token", session.CSRF)
-	response = call("POST", path, form, true)
+	response = call("POST", intakePath, form, true)
 	if response.StatusCode != 303 {
 		t.Fatal("human input rejected", response.StatusCode)
 	}
@@ -72,12 +77,20 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if response.StatusCode != 200 || strings.Contains(string(raw), "<script>") || !strings.Contains(string(raw), "&lt;script&gt;") {
 		t.Fatal("unsafe rendering")
 	}
-	response = call("GET", path, nil, true)
+	response = call("GET", dashboardPath, nil, true)
 	raw, _ = io.ReadAll(response.Body)
 	response.Body.Close()
-	if response.StatusCode != 200 || !strings.Contains(string(raw), "Submit objective") || !strings.Contains(string(raw), "&lt;script&gt;") {
+	if response.StatusCode != 200 || !strings.Contains(string(raw), "Submit objective") || !strings.Contains(string(raw), "objective-description") || !strings.Contains(string(raw), "&lt;script&gt;") {
 		t.Fatal("backlog view missing")
 	}
+	if !strings.Contains(string(raw), `<select id="project-switch" name="project">`) || !strings.Contains(string(raw), `value="`+project+`" selected`) || !strings.Contains(string(raw), `value="`+secondProject+`"`) || !strings.Contains(string(raw), "owner/second") {
+		t.Fatal("authorized project switcher is incomplete")
+	}
+	response = call("GET", intakePath, nil, true)
+	if response.StatusCode != http.StatusTemporaryRedirect || response.Header.Get("Location") != dashboardPath {
+		t.Fatal("legacy backlog address did not redirect", response.StatusCode, response.Header.Get("Location"))
+	}
+	response.Body.Close()
 	control := url.Values{"csrf_token": {"wrong"}, "expected_epoch": {"1"}, "action": {"pause"}}
 	response = call("POST", location+"/control", control, true)
 	if response.StatusCode != 403 {
@@ -98,7 +111,7 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	response = call("GET", location, nil, true)
 	raw, _ = io.ReadAll(response.Body)
 	response.Body.Close()
-	if response.StatusCode != 200 || !strings.Contains(string(raw), "Resume for architect reconciliation") || !strings.Contains(string(raw), "Lifecycle history") || !strings.Contains(string(raw), "epoch 2") {
+	if response.StatusCode != 200 || !strings.Contains(string(raw), "Resume for architect reconciliation") || !strings.Contains(string(raw), "<h2>History</h2>") || !strings.Contains(string(raw), "epoch 2") {
 		t.Fatal("pause controls/history missing", string(raw))
 	}
 	control.Set("expected_epoch", "2")
@@ -114,7 +127,7 @@ func TestHumanIntakeHTTPRejectsAgentsAndCSRFAndEscapesContent(t *testing.T) {
 	if response.StatusCode != 200 || !strings.Contains(string(raw), "Archived — history is preserved.") || strings.Contains(string(raw), "Save new input revision") || strings.Contains(string(raw), "Cancel objective") || !strings.Contains(string(raw), "epoch 3") {
 		t.Fatal("archive did not preserve read-only history", string(raw))
 	}
-	response = call("GET", path, nil, true)
+	response = call("GET", dashboardPath, nil, true)
 	raw, _ = io.ReadAll(response.Body)
 	response.Body.Close()
 	if strings.Contains(string(raw), "&lt;script&gt;") {

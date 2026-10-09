@@ -73,7 +73,7 @@ func TestCompleteBrowserInvitationAgentsAndMCPAcceptance(t *testing.T) {
 	ownerBody := loginBrowser(t, ownerClient, srv.URL)
 	ownerCSRF := field(t, ownerBody, "csrf_token")
 	noRedirect(ownerClient)
-	_, ownerPage := getBody(t, ownerClient, srv.URL+"/workspaces/"+w.ID)
+	_, ownerPage := getBody(t, ownerClient, srv.URL+"/workspaces/"+w.ID+"/settings")
 	if !strings.Contains(ownerPage, "Members and roles") || !strings.Contains(ownerPage, "Create invitation") || !strings.Contains(ownerPage, "Your agents") {
 		t.Fatal("management sections missing")
 	}
@@ -268,7 +268,7 @@ func TestManagementRoleCSRFAndEscaping(t *testing.T) {
 	if _, err = store.Register(ctx, w.ID, ownerSession.User.ID, "<script>evil</script>"); err != nil {
 		t.Fatal(err)
 	}
-	_, page := getBody(t, ownerClient, srv.URL+"/workspaces/"+w.ID)
+	_, page := getBody(t, ownerClient, srv.URL+"/workspaces/"+w.ID+"/settings")
 	if strings.Contains(page, "<script>evil") || !strings.Contains(page, "&lt;script&gt;evil") {
 		t.Fatal("agent name not escaped")
 	}

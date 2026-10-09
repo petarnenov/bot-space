@@ -89,7 +89,7 @@ func (w *Web) Protect(mutation bool, next func(http.ResponseWriter, *http.Reques
 		}
 		if mutation {
 			if !w.sameOrigin(r) || r.ParseForm() != nil || !security.Equal(r.PostForm.Get("csrf_token"), session.CSRF) {
-				http.Error(rw, "Forbidden", http.StatusForbidden)
+				http.Error(rw, "This form expired or came from another site. Reload the page and try again.", http.StatusForbidden)
 				return
 			}
 		}
@@ -167,6 +167,7 @@ func (w *Web) logout(rw http.ResponseWriter, r *http.Request, _ Session) {
 		return
 	}
 	w.setCookie(rw, w.CookieName(), "", -1)
+	w.setCookie(rw, "bot_space_project", "", -1)
 	http.Redirect(rw, r, "/", http.StatusSeeOther)
 }
 

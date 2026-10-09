@@ -330,8 +330,15 @@ func TestSessionExpiryCSRFOriginLogoutAndCookieFlags(t *testing.T) {
 	if _, err = web.Sessions.Authenticate(ctx, secret); err != nil {
 		t.Fatal("rejected logout changed state")
 	}
+	u, _ := url.Parse(srv.URL)
+	client.Jar.SetCookies(u, []*http.Cookie{{Name: "bot_space_project", Value: "11111111-1111-4111-8111-111111111111", Path: "/"}})
 	if post(session.CSRF, srv.URL) != 303 {
 		t.Fatal("valid logout failed")
+	}
+	for _, cookie := range client.Jar.Cookies(u) {
+		if cookie.Name == "bot_space_project" {
+			t.Fatal("logout retained selected project")
+		}
 	}
 	if _, err = web.Sessions.Authenticate(ctx, secret); err == nil {
 		t.Fatal("revoked cookie accepted")

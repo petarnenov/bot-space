@@ -1,17 +1,4 @@
-# project-observability Specification
-
-## Purpose
-Expose the human backlog, architect decisions and executor evidence under explicit project access while preserving private unrelated data.
-
-## Requirements
-
-### Requirement: Project-authorized workflow views
-Authorized project users and architects SHALL see the backlog, OpenSpec revisions, council membership/proposals/votes, assignments, questions and evidence permitted for that project. Executors SHALL receive their assigned context. Unrelated projects/workspaces and ordinary private inboxes SHALL remain isolated.
-
-#### Scenario: Council reviews another executor
-- **GIVEN** a project-authorized architect and an unrelated caller
-- **WHEN** they inspect an executor's project work
-- **THEN** the architect sees the required context and the unrelated caller receives no content.
+## MODIFIED Requirements
 
 ### Requirement: Human intake and autonomous status
 The human UI SHALL create top-level intentions from the project dashboard and display autonomous progress, blocked reasons and outcomes in objective details. It SHALL not require per-task plan/retry/merge/deploy approval or offer a consensus override. Status SHALL distinguish deliberation, no-majority blocking, capacity waiting, execution, questions, verification and completion using recorded workflow state; unavailable progress SHALL be identified rather than fabricated.
@@ -25,6 +12,8 @@ The human UI SHALL create top-level intentions from the project dashboard and di
 - **GIVEN** a submitted objective with no recorded planning or execution evidence
 - **WHEN** its dashboard row or detail page is viewed
 - **THEN** submission and the known state are shown without claiming execution, completion, or a guessed completion percentage.
+
+## ADDED Requirements
 
 ### Requirement: Unified objective detail
 Each objective SHALL have one canonical detail page containing its title, description, current input revision, status, recorded progress, available result, and chronological history. Missing results or history SHALL have clear empty states. Existing creator lifecycle and revision controls SHALL remain available under current authorization. The page SHALL link back to its project's objectives and keep technical evidence secondary to the main summary.
@@ -48,19 +37,3 @@ Each objective SHALL have one canonical detail page containing its title, descri
 - **GIVEN** an existing objective with input revisions and lifecycle history
 - **WHEN** the reorganized detail page is opened and an authorized creator action is submitted
 - **THEN** existing history is preserved and the existing revision, lifecycle, authorization, and concurrency rules still apply.
-
-### Requirement: Safe audit and rendering
-Identity, intake, votes, assignments and authoritative transitions SHALL have safe audit metadata. Browser mutations SHALL retain CSRF/same-origin protection. Views SHALL escape external content and use no-store/no-referrer; credentials and task bodies SHALL not enter operational logs.
-
-#### Scenario: Unsafe content or forged browser mutation
-- **GIVEN** script-like external text or invalid CSRF
-- **WHEN** it is rendered or submitted
-- **THEN** text is escaped or mutation denied without exposing secrets in logs.
-
-### Requirement: Product name
-The human interface SHALL display the product name “The Firm” in its shared header and page-title branding. Repository/module identifiers and existing workspace slugs SHALL retain compatibility.
-
-#### Scenario: Branded pages
-- **GIVEN** a human opening the application
-- **WHEN** shared pages or agent credential results render
-- **THEN** the displayed application brand is “The Firm”.

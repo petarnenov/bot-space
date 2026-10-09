@@ -8,6 +8,7 @@ import (
 	"github.com/petarnenov/bot-space/internal/backlog"
 	"github.com/petarnenov/bot-space/internal/identity"
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
+	"github.com/petarnenov/bot-space/internal/workspaces"
 )
 
 type backlogAuthority struct{ allowed bool }
@@ -17,6 +18,59 @@ func (a *backlogAuthority) Verify(context.Context, repositoryaccess.Repository, 
 		return nil
 	}
 	return repositoryaccess.ErrDenied
+}
+
+type projectAuthority struct {
+	allowed map[int64]bool
+	err     error
+}
+
+func (a *projectAuthority) Verify(_ context.Context, repo repositoryaccess.Repository, _ int64, _ bool) error {
+	if a.err != nil {
+		return a.err
+	}
+	if a.allowed[repo.ID] {
+		return nil
+	}
+	return repositoryaccess.ErrDenied
+}
+
+func TestProjectDiscoveryUsesRepositoryAuthority(t *testing.T) {
+	ctx, pool, _, workspace, owner := teams(t)
+	foreign, err := (&workspaces.Store{Pool: pool}).Bootstrap(ctx, 909, "foreign-project-team")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first, second string
+	if err = pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,42,101,'owner','first') RETURNING id::text`, workspace.ID).Scan(&first); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, `INSERT INTO mailbox.orchestration_projects(workspace_id,repository_id,repository_owner_id,repository_owner,repository_name) VALUES($1,43,909,'foreign','second') RETURNING id::text`, foreign.ID).Scan(&second); err != nil {
+		t.Fatal(err)
+	}
+	sessions := &identity.Sessions{Pool: pool}
+	_, secret, err := sessions.Login(ctx, owner.GitHubID, owner.Username, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority := &projectAuthority{allowed: map[int64]bool{42: true, 43: true}}
+	store := &backlog.Store{Pool: pool, Sessions: sessions, Authority: authority}
+	projects, err := store.Projects(ctx, secret)
+	if err != nil || len(projects) != 2 {
+		t.Fatal("repository authority did not discover projects independently of workspace role", err, len(projects))
+	}
+	authority.allowed[43] = false
+	projects, err = store.Projects(ctx, secret)
+	if err != nil || len(projects) != 1 || projects[0].ID != first {
+		t.Fatal("revoked project remained discoverable", err, projects)
+	}
+	if _, err = store.Project(ctx, secret, second); !errors.Is(err, backlog.ErrForbidden) {
+		t.Fatal("revoked selected project admitted", err)
+	}
+	authority.err = repositoryaccess.ErrUnavailable
+	if _, err = store.Projects(ctx, secret); !errors.Is(err, backlog.ErrUnavailable) {
+		t.Fatal("authority outage was not fail-closed", err)
+	}
 }
 func TestHumanBacklogDurableIdempotencyAndAuthentication(t *testing.T) {
 	ctx, pool, _, w, owner := teams(t)

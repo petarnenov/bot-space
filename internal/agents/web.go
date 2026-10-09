@@ -11,7 +11,7 @@ import (
 type Web struct{ Store *Store }
 type resultPage struct{ Title, WorkspaceID, AgentID, CredentialID, Token string }
 
-var resultTemplate = template.Must(template.New("agent-result").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}}</title><link rel="stylesheet" href="/assets/style.css"></head><body><header><a class="brand" href="/">The Firm</a></header><main><section><h1>{{.Title}}</h1><dl><dt>Agent ID</dt><dd><code>{{.AgentID}}</code></dd>{{if .CredentialID}}<dt>Credential ID</dt><dd><code>{{.CredentialID}}</code></dd>{{end}}</dl>{{if .Token}}<p>Save this token now. It will not be shown again.</p><code id="issued-token">{{.Token}}</code>{{end}}<p><a href="/workspaces/{{.WorkspaceID}}">Return to workspace</a></p></section></main></body></html>`))
+var resultTemplate = template.Must(template.New("agent-result").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}}</title><link rel="stylesheet" href="/assets/style.css"></head><body><header class="site-header"><a class="brand" href="/">The Firm</a><nav aria-label="Primary navigation"><a href="/">Objectives</a><a aria-current="page" href="/settings">Settings</a><a href="/profile">Profile</a></nav></header><main><section><h1>{{.Title}}</h1><dl><dt>Agent ID</dt><dd><code>{{.AgentID}}</code></dd>{{if .CredentialID}}<dt>Credential ID</dt><dd><code>{{.CredentialID}}</code></dd>{{end}}</dl>{{if .Token}}<p>Save this token now. It will not be shown again.</p><code id="issued-token">{{.Token}}</code>{{end}}<p><a href="/workspaces/{{.WorkspaceID}}/settings">Return to workspace settings</a></p></section></main></body></html>`))
 
 func (w *Web) Register(routes identity.Routes, browser *identity.Web) {
 	routes.Handle("POST /workspaces/{workspaceID}/agents", browser.Protect(true, w.register))
@@ -61,7 +61,7 @@ func (w *Web) deactivate(rw http.ResponseWriter, r *http.Request, session identi
 		failure(rw, err)
 		return
 	}
-	http.Redirect(rw, r, "/workspaces/"+workspaceID, http.StatusSeeOther)
+	http.Redirect(rw, r, "/workspaces/"+workspaceID+"/settings", http.StatusSeeOther)
 }
 
 func (w *Web) issue(rw http.ResponseWriter, r *http.Request, session identity.Session) {
@@ -80,7 +80,7 @@ func (w *Web) revoke(rw http.ResponseWriter, r *http.Request, session identity.S
 		failure(rw, err)
 		return
 	}
-	http.Redirect(rw, r, "/workspaces/"+workspaceID, http.StatusSeeOther)
+	http.Redirect(rw, r, "/workspaces/"+workspaceID+"/settings", http.StatusSeeOther)
 }
 
 func (w *Web) rotate(rw http.ResponseWriter, r *http.Request, session identity.Session) {
