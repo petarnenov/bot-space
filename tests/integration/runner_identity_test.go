@@ -275,3 +275,25 @@ func TestMachineRoleRetainsGitHubActorAcrossProjects(t *testing.T) {
 		}
 	}
 }
+
+func TestConfiguredProjectBootstrapIsStableAndFailClosed(t *testing.T) {
+	ctx, pool, _, w, _ := teams(t)
+	store := &runneridentity.Store{Pool: pool}
+	repo := repositoryaccess.Repository{ID: 42, OwnerID: 101, Owner: "owner", Name: "project"}
+	first, err := store.ConfigureProject(ctx, w.Slug, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.ConfigureProject(ctx, w.Slug, repo)
+	if err != nil || first != second {
+		t.Fatal("bootstrap replaced project identity", err)
+	}
+	changed := repo
+	changed.OwnerID = 202
+	if _, err = store.ConfigureProject(ctx, w.Slug, changed); err == nil {
+		t.Fatal("repository owner changed silently")
+	}
+	if _, err = store.ConfigureProject(ctx, "unknown-workspace", repo); err == nil {
+		t.Fatal("unknown workspace configured")
+	}
+}

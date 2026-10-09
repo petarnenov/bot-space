@@ -176,3 +176,39 @@ func (c *Checker) check(ctx context.Context, repo Repository, userID int64, toke
 	}
 	return false, ErrUnavailable
 }
+
+// Resolve is an operator project-setup operation. The verification integration
+// must be able to read collaborators, not merely public repository metadata.
+func (c *Checker) Resolve(ctx context.Context, owner, name string) (Repository, error) {
+	if !part.MatchString(owner) || !part.MatchString(name) {
+		return Repository{}, ErrInvalid
+	}
+	ctx, cancel := context.WithTimeout(ctx, RequestTimeout)
+	defer cancel()
+	token, err := c.token(ctx)
+	if err != nil || token == "" {
+		return Repository{}, ErrUnavailable
+	}
+	base := "/repos/" + owner + "/" + name
+	var details struct {
+		ID    int64  `json:"id"`
+		Name  string `json:"name"`
+		Owner struct {
+			ID    int64  `json:"id"`
+			Login string `json:"login"`
+		} `json:"owner"`
+	}
+	if err = c.get(ctx, base, token, &details); err != nil {
+		return Repository{}, err
+	}
+	if details.ID < 1 || details.Owner.ID < 1 || !strings.EqualFold(details.Name, name) || !strings.EqualFold(details.Owner.Login, owner) {
+		return Repository{}, ErrUnavailable
+	}
+	var members []struct {
+		ID int64 `json:"id"`
+	}
+	if err = c.get(ctx, base+"/collaborators?affiliation=direct&per_page=1", token, &members); err != nil {
+		return Repository{}, err
+	}
+	return Repository{ID: details.ID, OwnerID: details.Owner.ID, Owner: details.Owner.Login, Name: details.Name}, nil
+}

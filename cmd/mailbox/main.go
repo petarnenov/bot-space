@@ -6,12 +6,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/petarnenov/bot-space/internal/githubapp"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/petarnenov/bot-space/internal/agents"
@@ -45,8 +48,8 @@ func run(logger *slog.Logger) error {
 	if len(os.Args) >= 2 {
 		command = os.Args[1]
 	}
-	if (len(os.Args) > 2 && command != "bootstrap-owner") || (command != "serve" && command != "migrate" && command != "bootstrap-owner") {
-		return fmt.Errorf("usage: mailbox [serve|migrate|bootstrap-owner]")
+	if (len(os.Args) > 2 && command != "bootstrap-owner" && command != "bootstrap-project") || (command != "serve" && command != "migrate" && command != "bootstrap-owner" && command != "bootstrap-project") {
+		return fmt.Errorf("usage: mailbox [serve|migrate|bootstrap-owner|bootstrap-project]")
 	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
@@ -70,6 +73,41 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer pool.Close()
+	if command == "bootstrap-project" {
+		flags := flag.NewFlagSet("bootstrap-project", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		workspace := flags.String("workspace", "", "Workspace slug")
+		repository := flags.String("repository", "", "GitHub owner/repository")
+		if flags.Parse(os.Args[2:]) != nil || flags.NArg() != 0 {
+			return errors.New("invalid project bootstrap arguments")
+		}
+		parts := strings.Split(*repository, "/")
+		if len(parts) != 2 {
+			return errors.New("repository must be owner/name")
+		}
+		installation, e := strconv.ParseInt(os.Getenv("GITHUB_APP_INSTALLATION_ID"), 10, 64)
+		if e != nil {
+			return errors.New("GitHub App installation configuration required")
+		}
+		app, e := githubapp.New(os.Getenv("GITHUB_APP_CLIENT_ID"), installation, []byte(os.Getenv("GITHUB_APP_PRIVATE_KEY")))
+		if e != nil {
+			return e
+		}
+		checker, e := repositoryaccess.New(app.Token)
+		if e != nil {
+			return e
+		}
+		repo, e := checker.Resolve(ctx, parts[0], parts[1])
+		if e != nil {
+			return e
+		}
+		project, e := (&runneridentity.Store{Pool: pool}).ConfigureProject(ctx, *workspace, repo)
+		if e != nil {
+			return e
+		}
+		logger.Info("project_bootstrapped", "project_id", project, "repository_id", repo.ID)
+		return nil
+	}
 	if command == "bootstrap-owner" {
 		flags := flag.NewFlagSet("bootstrap-owner", flag.ContinueOnError)
 		flags.SetOutput(io.Discard)

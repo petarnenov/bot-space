@@ -176,3 +176,21 @@ per-RPC credentials. Calls enforce 256-KiB message bounds. The real-PG open-stre
 revocation test now exercises this actual client helper. Refresh requires a new
 connection with the new epoch and retained durable cursor; the runtime replay
 loop remains pending.
+
+## Operator project registration
+
+After migrations and App configuration, run:
+
+```sh
+mailbox bootstrap-project --workspace bot-space --repository petarnenov/bot-space
+```
+
+The command resolves immutable repository/owner IDs using the App and requires
+successful collaborator-endpoint access before storing a project. It emits only
+project/repository ID metadata. Repeated bootstrap retains the same project ID;
+unknown workspaces, inactive mappings or changed owner/name fail closed. This
+is platform setup and creates no memberships, invitations or individual agent
+grants. Other configured repositories receive their own project IDs/scopes.
+
+Real-PG tests verify stable bootstrap and owner-change rejection. Live production
+project bootstrap has not yet been executed.

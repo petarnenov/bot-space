@@ -165,3 +165,32 @@ func TestConcurrentOldVerificationCannotRestoreRemovedAccess(t *testing.T) {
 		t.Fatal("removed authority resurrected", err)
 	}
 }
+
+func TestResolveRequiresRepositoryVerificationAccess(t *testing.T) {
+	c, _, _ := fixture(t, `[{"id":2}]`)
+	c.client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/repos/owner/project" {
+			return response(200, details), nil
+		}
+		if r.URL.Query().Get("affiliation") != "direct" || r.URL.Query().Get("per_page") != "1" {
+			t.Fatal("wrong verification probe")
+		}
+		return response(200, `[{"id":1}]`), nil
+	})
+	resolved, err := c.Resolve(context.Background(), "owner", "project")
+	if err != nil || resolved != repo {
+		t.Fatal("repository resolution failed", err)
+	}
+	c.client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/repos/owner/project" {
+			return response(200, details), nil
+		}
+		return response(403, "private error"), nil
+	})
+	if _, err = c.Resolve(context.Background(), "owner", "project"); err != ErrUnavailable {
+		t.Fatal("public metadata alone configured project", err)
+	}
+	if _, err = c.Resolve(context.Background(), "../owner", "project"); err != ErrInvalid {
+		t.Fatal("unsafe repository path accepted")
+	}
+}
