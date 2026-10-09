@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Three provider adapters
+### Requirement: Two provider adapters
 Runner-managed sessions SHALL support Codex CLI, Claude Code and GitHub Copilot
 CLI through installed supported versions and machine-local authentication.
 Startup SHALL report missing binaries, unsupported protocol features and
