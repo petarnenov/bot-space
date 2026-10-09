@@ -85,3 +85,9 @@ need authoritative work/question/evidence subject bindings, and native control
 handlers/runtime are not yet wired. The storage foundation does not assign work,
 resume a coding session or merge a branch. Outbox replay and autonomous model
 coordination remain tasks 5.2 and 5.3.
+
+Council mutations reverify the exact GitHub actor/repository mapping before the
+transaction and bind that mapping again under row locks. A repository mapping
+change between verification and the write fails closed; a regression test races
+that change. Contract consumption additionally requires the contract repository
+ID to match the current project mapping.

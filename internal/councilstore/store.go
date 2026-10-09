@@ -38,25 +38,40 @@ type Lease struct {
 	ExpiresAt time.Time
 }
 
+type authenticated struct {
+	control.Principal
+	Repository repositoryaccess.Repository
+	GitHubID   int64
+}
+
 func rollback(tx pgx.Tx) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_ = tx.Rollback(ctx)
 }
-func (s *Store) authenticate(ctx context.Context, token string) (control.Principal, error) {
+func (s *Store) authenticate(ctx context.Context, token string) (authenticated, error) {
 	if s.Pool == nil || s.Identities == nil {
-		return control.Principal{}, ErrUnavailable
+		return authenticated{}, ErrUnavailable
 	}
 	p, err := s.Identities.Authenticate(ctx, token)
 	if err != nil || p.Role != pb.Role_ROLE_ARCHITECT {
-		return control.Principal{}, ErrForbidden
+		return authenticated{}, ErrForbidden
 	}
-	return p, nil
+	verified := authenticated{Principal: p}
+	err = s.Pool.QueryRow(ctx, `SELECT r.owner_github_id,p.repository_id,p.repository_owner_id,p.repository_owner,p.repository_name
+ FROM mailbox.project_runners r JOIN mailbox.orchestration_projects p ON p.id=r.project_id
+ WHERE r.id=$1 AND r.project_id=$2 AND r.active AND p.active AND r.role='architect' AND r.credential_epoch=$3 AND r.credential_hash=$4 AND r.credential_expires_at>clock_timestamp()`, p.RunnerID, p.ProjectID, p.CredentialEpoch, security.Hash(token)).Scan(&verified.GitHubID, &verified.Repository.ID, &verified.Repository.OwnerID, &verified.Repository.Owner, &verified.Repository.Name)
+	if err != nil || s.Identities.Authority.Verify(ctx, verified.Repository, verified.GitHubID, true) != nil {
+		return authenticated{}, ErrForbidden
+	}
+	return verified, nil
 }
-func actor(ctx context.Context, tx pgx.Tx, p control.Principal, token string) error {
+func actor(ctx context.Context, tx pgx.Tx, p authenticated, token string) error {
 	var id string
 	err := tx.QueryRow(ctx, `SELECT r.id::text FROM mailbox.project_runners r JOIN mailbox.orchestration_projects p ON p.id=r.project_id
- WHERE r.id=$1 AND r.project_id=$2 AND r.active AND p.active AND r.role='architect' AND r.credential_epoch=$3 AND r.credential_hash=$4 AND r.credential_expires_at>clock_timestamp() FOR SHARE OF r,p`, p.RunnerID, p.ProjectID, p.CredentialEpoch, security.Hash(token)).Scan(&id)
+ WHERE r.id=$1 AND r.project_id=$2 AND r.active AND p.active AND r.role='architect' AND r.credential_epoch=$3 AND r.credential_hash=$4 AND r.credential_expires_at>clock_timestamp()
+ AND r.owner_github_id=$5 AND p.repository_id=$6 AND p.repository_owner_id=$7 AND p.repository_owner=$8 AND p.repository_name=$9
+ FOR SHARE OF r,p`, p.RunnerID, p.ProjectID, p.CredentialEpoch, security.Hash(token), p.GitHubID, p.Repository.ID, p.Repository.OwnerID, p.Repository.Owner, p.Repository.Name).Scan(&id)
 	if err != nil {
 		return ErrForbidden
 	}
@@ -96,6 +111,7 @@ func source(ctx context.Context, tx pgx.Tx, project, contract string) (string, c
 	var epoch int64
 	err := tx.QueryRow(ctx, `SELECT c.root_id::text,c.root_revision,i.lifecycle_epoch,c.content_hash
  FROM mailbox.work_contracts c JOIN mailbox.human_intentions i ON i.project_id=c.project_id AND i.id=c.root_id
+	JOIN mailbox.orchestration_projects p ON p.id=c.project_id AND p.active AND p.repository_id=c.repository_id
  JOIN mailbox.contract_validations v ON v.project_id=c.project_id AND v.contract_id=c.id AND v.contract_hash=c.content_hash
  WHERE c.project_id=$1 AND c.id=$2`, project, contract).Scan(&root, &revision, &epoch, &digest)
 	if err != nil {

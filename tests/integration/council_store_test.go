@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -11,9 +12,16 @@ import (
 	"github.com/petarnenov/bot-space/internal/council"
 	"github.com/petarnenov/bot-space/internal/councilstore"
 	"github.com/petarnenov/bot-space/internal/identity"
+	"github.com/petarnenov/bot-space/internal/repositoryaccess"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
 	"github.com/petarnenov/bot-space/internal/security"
 )
+
+type councilVerifyHook func(context.Context, repositoryaccess.Repository, int64, bool) error
+
+func (f councilVerifyHook) Verify(ctx context.Context, repo repositoryaccess.Repository, actor int64, force bool) error {
+	return f(ctx, repo, actor, force)
+}
 
 func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	ctx, pool, _, workspace, owner := teams(t)
@@ -263,6 +271,20 @@ func TestDurableCouncilConcurrentVotesAndFixedOfflineMembership(t *testing.T) {
 	if err != nil || history.Snapshot.Status != council.Accepted {
 		t.Fatal("fenced historical decision unavailable", err)
 	}
+	identities.Authority = councilVerifyHook(func(ctx context.Context, repo repositoryaccess.Repository, actor int64, force bool) error {
+		if force {
+			_, e := pool.Exec(ctx, `UPDATE mailbox.orchestration_projects SET repository_name='moved' WHERE id=$1`, project)
+			return e
+		}
+		return nil
+	})
+	if _, err = restarted.Get(ctx, tokens[0], id); !errors.Is(err, councilstore.ErrForbidden) {
+		t.Fatal("repository mapping changed after verification but transaction retained authority", err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE mailbox.orchestration_projects SET repository_name='project' WHERE id=$1`, project); err != nil {
+		t.Fatal(err)
+	}
+	identities.Authority = authority
 	forged, err := council.Restore(reconsidered.Snapshot, reconsidered.Material)
 	if err != nil {
 		t.Fatal(err)
