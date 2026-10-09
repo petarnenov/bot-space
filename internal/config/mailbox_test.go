@@ -6,6 +6,26 @@ import (
 )
 
 func TestMailboxConfiguration(t *testing.T) {
+	for _, flag := range []string{"true", "false", "invalid"} {
+		c, err := LoadMailbox(func(k string) string {
+			if k == "TASKS_ENABLED" {
+				return flag
+			}
+			if k == "CURSOR_SIGNING_KEY" {
+				return strings.Repeat("01", 32)
+			}
+			return ""
+		}, "")
+		if flag == "invalid" {
+			if err == nil {
+				t.Fatal("invalid task feature flag accepted")
+			}
+			continue
+		}
+		if err != nil || c.TasksEnabled != (flag == "true") {
+			t.Fatal("task feature flag differs from configuration")
+		}
+	}
 	if c, err := LoadMailbox(func(string) string { return "" }, ""); err != nil || c.Enabled {
 		t.Fatal("absent mailbox enabled")
 	}

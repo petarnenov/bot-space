@@ -17,6 +17,7 @@ verified merely by being listed here.
 | Official MCP Go SDK | v1.8.0 locked and HTTP-tested | v1.8.0 |
 | Codex CLI | 0.162.0; bearer configuration parsing verified | optional client |
 | Claude Code | 2.1.292; authenticated HTTP connection verified | optional client |
+| GitHub Copilot CLI | 1.0.95; JSON execution/session-id smoke verified | optional client |
 
 The Go download API was rechecked and lists Go 1.27.2 as stable. The approved
 design records official release and documentation sources. Container digests,

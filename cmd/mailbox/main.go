@@ -33,6 +33,8 @@ import (
 	"github.com/petarnenov/bot-space/internal/ratelimit"
 	"github.com/petarnenov/bot-space/internal/repositoryaccess"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
+	"github.com/petarnenov/bot-space/internal/tasks"
+	"github.com/petarnenov/bot-space/internal/taskweb"
 	management "github.com/petarnenov/bot-space/internal/web"
 	"github.com/petarnenov/bot-space/internal/workspaces"
 	"github.com/petarnenov/bot-space/migrations"
@@ -161,13 +163,20 @@ func run(logger *slog.Logger) error {
 		}
 		(&agents.Web{Store: &agents.Store{Pool: pool}}).Register(server, web)
 		(&management.Management{Browser: web, Teams: &workspaces.Store{Pool: pool}, Agents: &agents.Store{Pool: pool}, MailboxEnabled: mailboxConfig.Enabled}).Register(server)
+		if mailboxConfig.Enabled && mailboxConfig.TasksEnabled {
+			(&taskweb.Web{Browser: web, Tasks: &tasks.Store{Pool: pool}}).Register(server)
+		}
 	}
 	if mailboxConfig.Enabled {
 		store, err := mailbox.New(pool, mailboxConfig.CursorKey)
 		if err != nil {
 			return fmt.Errorf("mailbox configuration is invalid")
 		}
-		server.Handle("/mcp", mcpserver.New(store, mailboxConfig.AllowedOrigins))
+		handler := mcpserver.New(store, mailboxConfig.AllowedOrigins)
+		if mailboxConfig.TasksEnabled {
+			handler = mcpserver.NewWithTasks(store, mailboxConfig.AllowedOrigins)
+		}
+		server.Handle("/mcp", handler)
 	}
 	grpcFailure := make(chan error, 1)
 	if runnerIdentities != nil {

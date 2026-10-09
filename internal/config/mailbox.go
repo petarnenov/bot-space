@@ -11,6 +11,7 @@ import (
 
 type Mailbox struct {
 	Enabled        bool
+	TasksEnabled   bool
 	CursorKey      []byte
 	AllowedOrigins []string
 }
@@ -40,7 +41,14 @@ func Origin(value string) (string, error) {
 
 func LoadMailbox(getenv func(string) string, publicOrigin string) (Mailbox, error) {
 	key, origins := getenv("CURSOR_SIGNING_KEY"), getenv("MCP_ALLOWED_ORIGINS")
+	tasks := getenv("TASKS_ENABLED")
+	if tasks != "" && tasks != "true" && tasks != "false" {
+		return Mailbox{}, errors.New("TASKS_ENABLED must be true or false")
+	}
 	if key == "" {
+		if tasks == "true" {
+			return Mailbox{}, errors.New("CURSOR_SIGNING_KEY is required with tasks")
+		}
 		if origins != "" {
 			return Mailbox{}, errors.New("CURSOR_SIGNING_KEY is required with MCP origins")
 		}
@@ -50,7 +58,7 @@ func LoadMailbox(getenv func(string) string, publicOrigin string) (Mailbox, erro
 	if err != nil || len(raw) != 32 {
 		return Mailbox{}, errors.New("CURSOR_SIGNING_KEY must encode 32 bytes as 64 hex characters")
 	}
-	c := Mailbox{Enabled: true, CursorKey: raw}
+	c := Mailbox{Enabled: true, TasksEnabled: tasks == "true", CursorKey: raw}
 	seen := map[string]bool{}
 	items := []string{}
 	if publicOrigin != "" {

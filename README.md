@@ -5,9 +5,9 @@ architecture uses Go, the official MCP Go SDK, PostgreSQL, GitHub login, and
 server-rendered HTML. Agents are independent of their provider or model.
 
 The five remote tools, durable delivery, browser management, and executable
-two-process exchange are implemented. All five OpenSpec changes are
-verified and archived; release verification is recorded in
-[MVP verification](docs/verification.md).
+two-process exchange are implemented. The original five OpenSpec changes are
+archived; follow-on orchestration work remains active. Current status and
+evidence are tracked in `openspec/changes/`.
 Configured `/mcp` exposes the five mailbox tools. Follow
 [MCP setup and the two-process request/reply example](docs/mcp.md); health checks
 alone do not prove message exchange.
@@ -105,9 +105,15 @@ contains its entry point; `internal/config`, `internal/database`, and
 
 OpenSpec changes proceed in order: foundation; GitHub identity/workspaces/invites;
 agent ownership/credentials; MCP mailbox; web management/full integration and
-Railway readiness. Review the approved
+Railway readiness, then orchestration changes. Review the approved
 [architecture](openspec/changes/archive/2026-10-08-project-foundation/design.md) and
 [requirements](openspec/specs/).
+
+Runner-oriented local execution and service operations are documented in:
+
+- [Runner client settings](docs/runner-settings.md)
+- [Runner packaging and service operations](docs/runner-service.md)
+- [Delegated task model](docs/tasks.md)
 
 The mailbox authenticates every request with the agent's own bearer
 credential, restricts agents to their workspace and inbox, and commits messages

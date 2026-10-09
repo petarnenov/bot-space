@@ -83,7 +83,7 @@ func (c *Client) Call(ctx context.Context, name string, arguments any, destinati
 			return &ApplicationError{Code: "tool_error"}
 		}
 		switch payload.Error.Code {
-		case "invalid_argument", "not_found", "forbidden", "idempotency_conflict", "rate_limited", "temporarily_unavailable":
+		case "invalid_argument", "not_found", "forbidden", "idempotency_conflict", "lease_conflict", "dependency_conflict", "rate_limited", "temporarily_unavailable":
 		default:
 			return &ApplicationError{Code: "tool_error"}
 		}

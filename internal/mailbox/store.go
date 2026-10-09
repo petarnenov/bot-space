@@ -41,7 +41,7 @@ func scanMessage(row scanner) (Message, error) {
 }
 
 func (s *Store) Send(ctx context.Context, token string, input SendInput) (Message, error) {
-	input, metadata, fingerprint, err := normalizeSend(input)
+	input, _, _, err := normalizeSend(input)
 	if err != nil {
 		return Message{}, err
 	}
@@ -53,6 +53,25 @@ func (s *Store) Send(ctx context.Context, token string, input SendInput) (Messag
 	}
 	defer rollback(tx)
 	p, err := s.Auth.AuthenticateTx(ctx, tx, token)
+	if err != nil {
+		return Message{}, authError(err)
+	}
+	m, err := s.SendTx(ctx, tx, p, input)
+	if err != nil {
+		return Message{}, err
+	}
+	return m, commit(ctx, tx)
+}
+
+// SendTx adds a message to a caller-owned transaction without committing it.
+// Rechecking the opaque credential principal preserves the normal authorization
+// boundary when another domain atomically links a message to durable state.
+func (s *Store) SendTx(ctx context.Context, tx pgx.Tx, p agents.Principal, input SendInput) (Message, error) {
+	input, metadata, fingerprint, err := normalizeSend(input)
+	if err != nil {
+		return Message{}, err
+	}
+	p, err = s.Auth.RecheckTx(ctx, tx, p)
 	if err != nil {
 		return Message{}, authError(err)
 	}
@@ -70,7 +89,7 @@ func (s *Store) Send(ctx context.Context, token string, input SendInput) (Messag
 		if err != nil {
 			return Message{}, ErrUnavailable
 		}
-		return m, commit(ctx, tx)
+		return m, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, ErrUnavailable
@@ -92,7 +111,7 @@ func (s *Store) Send(ctx context.Context, token string, input SendInput) (Messag
 	if err != nil {
 		return Message{}, ErrUnavailable
 	}
-	return m, commit(ctx, tx)
+	return m, nil
 }
 
 func recipient(ctx context.Context, tx pgx.Tx, workspaceID, agentID string) error {

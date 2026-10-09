@@ -83,3 +83,62 @@ func parseBlobSize(raw string) (int, error) {
 	}
 	return size, nil
 }
+
+func ValidateOpenSpecBranch(branch string) error {
+	if strings.TrimSpace(branch) == "" {
+		return ErrArtifacts
+	}
+	if strings.Contains(branch, "..") || strings.Contains(branch, " ") || strings.Contains(branch, "\\") || strings.Contains(branch, "\t") {
+		return ErrArtifacts
+	}
+	if !strings.HasPrefix(branch, "openspec/") {
+		return ErrArtifacts
+	}
+	name := strings.TrimPrefix(branch, "openspec/")
+	if name == "" || strings.Contains(name, "/") || strings.HasSuffix(name, "/") {
+		return ErrArtifacts
+	}
+	return nil
+}
+
+func WorktreeIsClean(ctx context.Context, checkout string) (bool, error) {
+	if !filepath.IsAbs(checkout) {
+		return false, ErrArtifacts
+	}
+	info, err := os.Stat(checkout)
+	if err != nil || !info.IsDir() {
+		return false, ErrArtifacts
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", checkout, "--no-pager", "status", "--porcelain")
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
+	out, err := cmd.Output()
+	if err != nil {
+		return false, ErrArtifacts
+	}
+	return len(strings.TrimSpace(string(out))) == 0, nil
+}
+
+func WorktreeBranch(ctx context.Context, checkout string) (string, error) {
+	if !filepath.IsAbs(checkout) {
+		return "", ErrArtifacts
+	}
+	info, err := os.Stat(checkout)
+	if err != nil || !info.IsDir() {
+		return "", ErrArtifacts
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", checkout, "--no-pager", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
+	out, err := cmd.Output()
+	if err != nil {
+		return "", ErrArtifacts
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "HEAD" {
+		return "", ErrArtifacts
+	}
+	return branch, nil
+}

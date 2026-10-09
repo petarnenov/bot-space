@@ -36,7 +36,7 @@ Each registered runner SHALL have an explicit architect or executor role and one
 - **THEN** its executor identity remains unchanged and the vote is denied.
 
 ### Requirement: Startup client and inference configuration
-Startup SHALL select client, default model and effort per runner, with CLI precedence over private configuration. Adapters SHALL validate settings without silent substitution and preserve exact-session continuation, bounded results, local permissions and credential separation. Codex, Claude, Copilot, Hermes and OpenClaw SHALL have verified adapters; unsupported effort controls SHALL fail clearly.
+Startup SHALL select client, default model and effort per runner, with CLI precedence over private configuration. Adapters SHALL validate settings without silent substitution and preserve exact-session continuation, bounded results, local permissions and credential separation. Codex, Claude and Copilot SHALL have verified adapters; unsupported effort controls SHALL fail clearly.
 
 #### Scenario: Independent client settings
 - **GIVEN** an architect and executor running on one host

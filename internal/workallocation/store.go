@@ -56,7 +56,7 @@ func rollback(tx pgx.Tx) {
 }
 func (c Client) canonical() ([]byte, string, error) {
 	switch c.Agent {
-	case "codex", "claude", "copilot", "hermes", "openclaw":
+	case "codex", "claude", "copilot":
 	default:
 		return nil, "", ErrInvalid
 	}

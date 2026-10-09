@@ -57,3 +57,48 @@ func TestCommittedArtifactVerificationIgnoresDirtyFilesAndRejectsMismatches(t *t
 		t.Fatal("false digest verified")
 	}
 }
+
+func TestOpenSpecBranchAndWorktreeChecks(t *testing.T) {
+	root := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal("Git fixture failed")
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("init", "-q")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.invalid")
+	if err := ValidateOpenSpecBranch("main"); err != ErrArtifacts {
+		t.Fatal("main branch accepted as OpenSpec change branch")
+	}
+	if err := ValidateOpenSpecBranch("openspec/architect-led-orchestration"); err != nil {
+		t.Fatal("valid change branch rejected")
+	}
+	if err := ValidateOpenSpecBranch("openspec/feature/extra"); err != ErrArtifacts {
+		t.Fatal("nested branch accepted")
+	}
+	if err := os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("initial\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "initial")
+	clean, err := WorktreeIsClean(context.Background(), root)
+	if err != nil || !clean {
+		t.Fatal("clean worktree failed validation")
+	}
+	if err := os.WriteFile(filepath.Join(root, "dirty.txt"), []byte("dirty\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	clean, err = WorktreeIsClean(context.Background(), root)
+	if err != nil || clean {
+		t.Fatal("dirty worktree passed validation")
+	}
+	current, err := WorktreeBranch(context.Background(), root)
+	if err != nil || current != "master" && current != "main" {
+		t.Fatalf("unexpected branch %q: %v", current, err)
+	}
+}

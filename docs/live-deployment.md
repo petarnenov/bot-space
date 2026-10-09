@@ -76,3 +76,14 @@ Railway's public proxy using browser-issued agent credentials. Confirm
 production backup retention/scheduling and an operator-managed restore drill.
 Local synthetic restore and SDK exchange proofs remain in verification.md;
 they do not substitute for these live checks.
+
+## Runner operations model
+
+Task execution is machine-local: run one runner supervisor per physical machine
+role with separate owner-only state and configuration. Railway hosts mailbox/task
+coordination over HTTPS; provider credentials and permission policy remain local
+to each machine/account and are never moved to Railway.
+
+Use [runner client settings](runner-settings.md) for local provider/session
+policy and [runner packaging and service operations](runner-service.md) for
+foreground operation and auto-start install/uninstall flows.

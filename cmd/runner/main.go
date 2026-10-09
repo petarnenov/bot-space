@@ -18,8 +18,10 @@ import (
 	"syscall"
 	"time"
 
+	localrunner "github.com/petarnenov/bot-space/internal/runner"
 	"github.com/petarnenov/bot-space/internal/runneridentity"
 	"github.com/petarnenov/bot-space/internal/security"
+	"github.com/petarnenov/bot-space/internal/tasks"
 )
 
 type projects []string
@@ -44,6 +46,101 @@ func main() {
 // The full serve/control/provider runtime remains tracked separately. Enroll is
 // a concrete authentication entrypoint reused by automatic startup integration.
 func run(ctx context.Context, args []string, out io.Writer, open func(string) error) error {
+	if len(args) == 0 {
+		return errors.New("usage: runner serve|enroll|doctor|start-task|status")
+	}
+	switch args[0] {
+	case "start-task", "status":
+		return runLocal(ctx, args, out)
+	case "serve", "doctor":
+		for _, arg := range args[1:] {
+			if strings.HasPrefix(arg, "--config=") || arg == "--config" {
+				return runLocal(ctx, args, out)
+			}
+		}
+	case "enroll":
+	default:
+		return errors.New("usage: runner serve|enroll|doctor|start-task|status")
+	}
+	return runIdentity(ctx, args, out, open)
+}
+
+func runLocal(ctx context.Context, args []string, out io.Writer) error {
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flags.SetOutput(out)
+	configPath := flags.String("config", "", "Absolute owner-only runner JSON configuration file")
+	agent := flags.String("agent", "", "Agent UUID for start-task")
+	instruction := flags.String("instruction", "", "Task instruction for start-task")
+	timeout := flags.Int("timeout-seconds", tasks.DefaultTimeoutSeconds, "Task timeout in seconds")
+	if err := flags.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return errors.New("invalid runner arguments")
+	}
+	if *configPath == "" {
+		return errors.New("runner local commands require --config")
+	}
+	config, err := localrunner.LoadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "doctor":
+		if flags.NArg() != 0 || *agent != "" || *instruction != "" {
+			return errors.New("doctor accepts only --config")
+		}
+		if err = localrunner.Doctor(ctx, config); err != nil {
+			return err
+		}
+		providers, err := localrunner.ProviderChecks(ctx, config)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(struct {
+			StateDir  string                      `json:"state_dir"`
+			Endpoint  string                      `json:"endpoint"`
+			Providers []localrunner.ProviderCheck `json:"providers"`
+		}{StateDir: config.StateDir, Endpoint: config.Endpoint, Providers: providers})
+	case "serve":
+		if flags.NArg() != 0 || *agent != "" || *instruction != "" {
+			return errors.New("serve accepts only --config")
+		}
+		supervisor, err := localrunner.NewSupervisor(config)
+		if err != nil {
+			return err
+		}
+		defer supervisor.Close()
+		return supervisor.Serve(ctx)
+	case "start-task":
+		if flags.NArg() != 0 || *agent == "" || *instruction == "" || !security.ValidUUID(*agent) {
+			return errors.New("start-task requires --config, --agent UUID and --instruction")
+		}
+		var status localrunner.JobStatus
+		err := localrunner.LocalCall(ctx, config.StateDir, "POST", "/start", localrunner.StartInput{
+			AgentID:        strings.ToLower(*agent),
+			Instruction:    *instruction,
+			TimeoutSeconds: *timeout,
+		}, &status)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(status)
+	case "status":
+		if flags.NArg() != 0 || *agent != "" || *instruction != "" {
+			return errors.New("status accepts only --config")
+		}
+		var statuses []localrunner.JobStatus
+		if err := localrunner.LocalCall(ctx, config.StateDir, "GET", "/status", nil, &statuses); err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(statuses)
+	default:
+		return errors.New("usage: runner serve|enroll|doctor|start-task|status")
+	}
+}
+
+func runIdentity(ctx context.Context, args []string, out io.Writer, open func(string) error) error {
 	if len(args) == 0 || (args[0] != "enroll" && args[0] != "doctor" && args[0] != "serve") {
 		return errors.New("usage: runner serve|enroll|doctor --server ORIGIN --state ABSOLUTE_PATH --role architect|executor --project UUID [--project UUID]")
 	}

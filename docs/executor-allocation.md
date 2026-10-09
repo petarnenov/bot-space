@@ -29,8 +29,9 @@ in another project, without returning that other project's task contents.
 There is no task deadline, elapsed execution budget or automatic expiry release.
 Presence and credential bounds protect connectivity/authority only. Native
 control handlers, local scheduling/session execution, renewable task authority,
-question/evidence transitions and majority-backed release remain pending.
-Tasks 5.1 and 6.1 are not marked complete from these foundations.
+question/evidence transitions and majority-backed release are implemented in the
+server state machine and verified in the real-PG integration tests for tasks 5.1
+and 6.1-6.3.
 
 Real-PG race tests reserve one machine concurrently through two projects and
 verify one winner, an occupied rejection, retry idempotency, shared busy state,

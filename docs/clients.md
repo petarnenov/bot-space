@@ -24,7 +24,9 @@ codex -c 'mcp_servers.bot_space.url="http://127.0.0.1:8080/mcp"' \
 ```
 
 It recognized `streamable_http` and the bearer environment variable. This proves
-configuration parsing. A Codex model session/tool call was not executed.
+configuration parsing and adapter compatibility. Runner smoke evidence also
+includes real Codex turn execution and exact-thread continuation
+([runner settings](runner-settings.md#verified-local-adapter-smoke-commands)).
 See [official Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
 
 ## Claude Code
@@ -50,6 +52,8 @@ only through the environment. `mcp get` reported `Connected` against the real
 SDK HTTP handler and PostgreSQL authentication. Temporary settings were removed;
 the user's settings were untouched. No model-driven tool call was executed.
 See [official HTTP and environment expansion documentation](https://code.claude.com/docs/en/mcp).
+Runner-side Claude command execution is currently blocked by account usage limits
+(`usage_limit_reached`), so only CLI wiring validation is currently documented.
 
 ## Go SDK and Activation
 
